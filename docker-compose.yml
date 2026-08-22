@@ -1,0 +1,58 @@
+---
+name: ghost-rg35xxh
+
+# ghOSt-RG35XXH Build — Docker Compose
+# Usage: docker compose up --build
+# Output: ./output/ghOSt-RG35XXH-1.0.0.img.gz when complete
+
+services:
+  ghost-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghost-rg35xxh-builder:latest
+    command: build
+
+    # Required for loop device access during image assembly
+    privileged: true
+
+    # Output directory — .img.gz appears here on your host
+    volumes:
+      - ./output:/opt/ghost-build/output
+      # Persistent build workspaces — survive rebuilds and let failed runs resume
+      - ghost-kernel-cache:/opt/ghost-build/kernel
+      - ghost-uboot-cache:/opt/ghost-build/uboot
+      - ghost-rootfs-cache:/opt/ghost-build/rootfs
+
+    # Enough shared memory for parallel kernel compile
+    shm_size: '2gb'
+
+    # Keep container on failure so you can docker exec in and debug
+    restart: "no"
+
+    # Show build output in real time
+    tty: true
+    stdin_open: true
+
+    environment:
+      - GHOST_TIMEZONE=UTC
+      - KALI_SIZE=default
+      - GAMES_PROFILE=lean
+      - INCLUDE_PORTMASTER=false
+      - INCLUDE_DOSBOX=false
+      - INCLUDE_FEX=false
+      - INCLUDE_WINE=false
+      # Uncomment to skip steps on rebuild:
+      # - SKIP_KERNEL=true
+      # - SKIP_ROOTFS=true
+      # - SKIP_OVERLAY=true
+      # - SKIP_CONFIGURE=true
+      # - SKIP_IMAGE=true
+
+volumes:
+  ghost-kernel-cache:
+    driver: local
+  ghost-uboot-cache:
+    driver: local
+  ghost-rootfs-cache:
+    driver: local

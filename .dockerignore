@@ -1,0 +1,38 @@
+# ghOSt .dockerignore
+# Keep Docker build context lean
+
+output/
+*.img
+*.img.gz
+*.zip
+*.tar.gz
+*.log
+
+# Build artifacts
+/opt/
+/tmp/
+
+# Git
+.git/
+.gitignore
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+._*
+
+# Windows
+Thumbs.db
+desktop.ini

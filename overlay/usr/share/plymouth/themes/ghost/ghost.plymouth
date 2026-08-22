@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=ghOSt
+Description=ghOSt-RG35XXH boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/ghost
+ScriptFile=/usr/share/plymouth/themes/ghost/ghost.script

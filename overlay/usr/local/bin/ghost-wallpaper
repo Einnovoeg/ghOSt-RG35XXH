@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# ghOSt-RG35XXH wallpaper manager
+# Called at session start — handles swaybg, swww, or feh depending on what's installed
+WALLPAPER="${1:-/opt/ghost/wallpapers/shodan.jpg}"
+
+if command -v swaybg &>/dev/null; then
+    pkill swaybg 2>/dev/null
+    swaybg -m fill -i "$WALLPAPER" &
+elif command -v swww &>/dev/null; then
+    swww init 2>/dev/null
+    swww img "$WALLPAPER" --transition-type fade --transition-duration 1
+elif command -v feh &>/dev/null; then
+    feh --bg-fill "$WALLPAPER"
+fi
+
+# Also set swaylock to use same wallpaper
+mkdir -p ~/.config/swaylock
+sed -i "s|^image=.*|image=$WALLPAPER|" ~/.config/swaylock/config 2>/dev/null || \
+    echo "image=$WALLPAPER" >> ~/.config/swaylock/config

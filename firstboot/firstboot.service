@@ -1,0 +1,15 @@
+[Unit]
+Description=ghOSt First Boot Setup
+After=ghost-gui.service network.target bluetooth.target
+ConditionPathExists=!/var/lib/ghost/.firstboot_done
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/firstboot.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

@@ -1,0 +1,322 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ghOSt-RG35XXH CPU Power Profile Manager
+# Easy switching between power modes optimized for RG35XXH H700
+#
+# Usage:
+#   ghost-power                 # interactive menu
+#   ghost-power performance     # max performance
+#   ghost-power balanced        # default balanced
+#   ghost-power powersave       # max battery life
+#   ghost-power gaming          # optimized for gaming
+#   ghost-power stealth         # silent, minimal power
+#   ghost-power status          # show current state
+# =============================================================================
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+PROFILE_STATE="/var/lib/ghost/power_profile"
+
+log()     { echo -e "${GREEN}[power]${NC} $*"; }
+warn()    { echo -e "${YELLOW}[power]${NC} $*"; }
+section() { echo -e "\n${CYAN}${BOLD}$*${NC}"; }
+
+# =============================================================================
+# CORE FUNCTIONS
+# =============================================================================
+
+set_governor() {
+    local gov="$1"
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+        echo "$gov" > "$cpu" 2>/dev/null || true
+    done
+}
+
+set_max_freq() {
+    local freq="$1"  # in kHz, e.g. 1512000
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq; do
+        echo "$freq" > "$cpu" 2>/dev/null || true
+    done
+}
+
+set_min_freq() {
+    local freq="$1"
+    for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_min_freq; do
+        echo "$freq" > "$cpu" 2>/dev/null || true
+    done
+}
+
+get_available_freqs() {
+    cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies \
+        2>/dev/null || echo "unknown"
+}
+
+get_max_freq() {
+    cat /sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq 2>/dev/null || echo "unknown"
+}
+
+set_gpu_governor() {
+    # Mali GPU governor (H700 has Mali-G31)
+    local gov="$1"
+    echo "$gov" > /sys/class/devfreq/*/governor 2>/dev/null || true
+}
+
+set_io_scheduler() {
+    # SD card I/O scheduler
+    local sched="$1"
+    for dev in /sys/block/mmcblk*/queue/scheduler; do
+        echo "$sched" > "$dev" 2>/dev/null || true
+    done
+}
+
+notify_profile() {
+    local name="$1"
+    notify-send -u low -t 2000 "Power Profile" "$name activated" \
+        --app-name="ghOSt" 2>/dev/null || true
+}
+
+save_profile() {
+    mkdir -p "$(dirname $PROFILE_STATE)"
+    echo "$1" > "$PROFILE_STATE"
+}
+
+# =============================================================================
+# PROFILES
+# =============================================================================
+
+profile_performance() {
+    section "⚡ Performance Mode"
+    log "Max CPU, max GPU, performance I/O"
+
+    set_governor           "performance"
+    set_max_freq           "$(get_max_freq)"
+    set_min_freq           "600000"
+    set_gpu_governor       "performance"
+    set_io_scheduler       "none"       # No I/O scheduler for max throughput
+
+    # Disable CPU idle states for minimum latency
+    for state in /sys/devices/system/cpu/cpu*/cpuidle/state*/disable; do
+        echo 1 > "$state" 2>/dev/null || true
+    done
+
+    # Boost zram to max
+    echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null || true
+
+    notify_profile "⚡ Performance"
+    save_profile "performance"
+    log "Performance profile active — high power consumption"
+}
+
+profile_balanced() {
+    section "⚖️ Balanced Mode"
+    log "Adaptive scaling, moderate power"
+
+    set_governor           "schedutil"
+    set_max_freq           "$(get_max_freq)"
+    set_min_freq           "408000"
+    set_gpu_governor       "simple_ondemand"
+    set_io_scheduler       "mq-deadline"
+
+    # Re-enable CPU idle states
+    for state in /sys/devices/system/cpu/cpu*/cpuidle/state*/disable; do
+        echo 0 > "$state" 2>/dev/null || true
+    done
+
+    notify_profile "⚖️ Balanced"
+    save_profile "balanced"
+    log "Balanced profile active — default"
+}
+
+profile_powersave() {
+    section "🔋 Power Save Mode"
+    log "Minimum power — maximum battery life"
+
+    set_governor           "powersave"
+    set_max_freq           "816000"     # Cap at ~816MHz
+    set_min_freq           "240000"
+    set_gpu_governor       "powersave"
+    set_io_scheduler       "mq-deadline"
+
+    # Aggressive CPU idle
+    for state in /sys/devices/system/cpu/cpu*/cpuidle/state*/disable; do
+        echo 0 > "$state" 2>/dev/null || true
+    done
+
+    # Turn off non-essential LEDs
+    for led in /sys/class/leds/*/brightness; do
+        echo 0 > "$led" 2>/dev/null || true
+    done
+
+    # Reduce screen refresh (if supported)
+    echo 30 > /sys/class/backlight/*/bl_power 2>/dev/null || true
+
+    notify_profile "🔋 Power Save"
+    save_profile "powersave"
+    log "Power save active — CPU capped at 816MHz"
+}
+
+profile_gaming() {
+    section "🎮 Gaming Mode"
+    log "Balanced-high performance, optimized for gaming"
+
+    set_governor           "performance"
+    set_max_freq           "$(get_max_freq)"
+    set_min_freq           "816000"     # Keep min high to avoid lag spikes
+    set_gpu_governor       "performance"
+    set_io_scheduler       "none"
+
+    # GameMode integration
+    if command -v gamemoded &>/dev/null; then
+        systemctl --user start gamemoded 2>/dev/null || true
+    fi
+
+    # Increase audio buffer priority
+    chrt -r -p 50 "$(pgrep -x pipewire)" 2>/dev/null || true
+
+    # Reduce background service polling during gaming
+    # These get restored on next profile change
+    systemctl stop syncthing@ghost 2>/dev/null || true
+
+    notify_profile "🎮 Gaming"
+    save_profile "gaming"
+    log "Gaming profile active — syncthing suspended"
+}
+
+profile_stealth() {
+    section "👻 Stealth Mode Power"
+    log "Silent, cool, minimal footprint"
+
+    set_governor           "powersave"
+    set_max_freq           "1008000"
+    set_min_freq           "240000"
+    set_gpu_governor       "powersave"
+    set_io_scheduler       "mq-deadline"
+
+    # Minimize all background services
+    for svc in syncthing@ghost kismet bettercap; do
+        systemctl stop "$svc" 2>/dev/null || true
+    done
+
+    save_profile "stealth"
+    # No notification in stealth mode
+    log "Stealth power profile active"
+}
+
+profile_sdr() {
+    section "📡 SDR Mode"
+    log "Stable clocks for signal work — no frequency scaling"
+
+    # Fixed frequency prevents interference from clock scaling
+    # on sensitive SDR dongles
+    set_governor           "performance"
+    set_max_freq           "1008000"
+    set_min_freq           "1008000"   # Fixed clock — eliminates SDR artifacts
+    set_gpu_governor       "powersave"
+    set_io_scheduler       "mq-deadline"
+
+    notify_profile "📡 SDR"
+    save_profile "sdr"
+    log "SDR profile active — fixed 1GHz clock (eliminates RF interference)"
+    warn "Fixed clock = higher power draw. Plug in if doing long captures."
+}
+
+show_status() {
+    section "ghOSt-RG35XXH Power Status"
+
+    local current
+    current=$(cat "$PROFILE_STATE" 2>/dev/null || echo "balanced")
+
+    local gov
+    gov=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+
+    local cur_freq
+    cur_freq=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+    local cur_mhz=$(( cur_freq / 1000 ))
+
+    local max_freq
+    max_freq=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq 2>/dev/null || echo "0")
+    local max_mhz=$(( max_freq / 1000 ))
+
+    local cap
+    cap=$(cat /sys/class/power_supply/*/capacity 2>/dev/null | head -1 || echo "?")
+    local charging
+    charging=$(cat /sys/class/power_supply/*/status 2>/dev/null | head -1 || echo "?")
+
+    local temp
+    temp=$(awk '{printf "%.1f°C", $1/1000}' \
+        /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo "?")
+
+    echo -e "  Active profile:  ${BOLD}${current}${NC}"
+    echo -e "  CPU governor:    ${gov}"
+    echo -e "  Current freq:    ${cur_mhz} MHz"
+    echo -e "  Max freq:        ${max_mhz} MHz"
+    echo -e "  Temperature:     ${temp}"
+    echo -e "  Battery:         ${cap}% (${charging})"
+    echo -e ""
+    echo -e "  Available freqs: $(get_available_freqs)"
+    echo -e ""
+    echo -e "  Profiles:        ${CYAN}performance balanced powersave gaming stealth sdr${NC}"
+}
+
+show_menu() {
+    current=$(cat "$PROFILE_STATE" 2>/dev/null || echo "balanced")
+    echo ""
+    echo -e "${CYAN}${BOLD} ghOSt-RG35XXH Power Profiles${NC}"
+    echo -e " ────────────────────────────────"
+
+    declare -A descs=(
+        ["performance"]="⚡  Max CPU/GPU — best speed, most power"
+        ["balanced"]="⚖️   Adaptive scaling — default"
+        ["powersave"]="🔋  Cap 816MHz — maximum battery life"
+        ["gaming"]="🎮  High clocks, game-optimized I/O"
+        ["stealth"]="👻  Silent, minimal, background services off"
+        ["sdr"]="📡  Fixed clock — stable RF, no artifacts"
+    )
+
+    local i=1
+    local keys=("performance" "balanced" "powersave" "gaming" "stealth" "sdr")
+    for k in "${keys[@]}"; do
+        local marker=" "
+        [[ "$k" == "$current" ]] && marker="${GREEN}▶${NC}"
+        echo -e " ${marker} [${i}] ${BOLD}${k}${NC}"
+        echo -e "       ${descs[$k]}"
+        (( i++ ))
+    done
+    echo -e " [0] Cancel"
+    echo ""
+
+    read -r -p "Select profile: " choice
+    case "$choice" in
+        1) profile_performance ;;
+        2) profile_balanced    ;;
+        3) profile_powersave   ;;
+        4) profile_gaming      ;;
+        5) profile_stealth     ;;
+        6) profile_sdr         ;;
+        0|"") echo "Cancelled" ;;
+        *) echo "Invalid choice" ;;
+    esac
+}
+
+# =============================================================================
+# DISPATCH
+# =============================================================================
+case "${1:-menu}" in
+    performance)  profile_performance ;;
+    balanced)     profile_balanced    ;;
+    powersave)    profile_powersave   ;;
+    gaming)       profile_gaming      ;;
+    stealth)      profile_stealth     ;;
+    sdr)          profile_sdr         ;;
+    status)       show_status         ;;
+    menu|"")      show_menu           ;;
+    *)
+        echo "Usage: ghost-power [performance|balanced|powersave|gaming|stealth|sdr|status]"
+        exit 1
+        ;;
+esac

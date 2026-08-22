@@ -1,0 +1,21 @@
+[Unit]
+Description=ghOSt Stealth Mode Daemon
+After=bluetooth.target graphical.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=ghost
+Group=input
+SupplementaryGroups=input plugdev
+WorkingDirectory=/home/ghost
+ExecStart=/usr/bin/python3 /opt/ghost/stealthd/stealthd.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# Hide from casual process inspection
+SyslogIdentifier=kworker
+
+[Install]
+WantedBy=graphical.target

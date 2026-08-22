@@ -1,0 +1,10 @@
+# ghOSt-RG35XXH Sway config
+include /etc/sway/config.d/*
+
+# Wallpaper — SHODAN keeps watch
+exec ghost-wallpaper /opt/ghost/wallpapers/shodan.jpg
+
+# No title bars, no gaps — full immersion
+default_border none
+gaps inner 0
+gaps outer 0

@@ -1,0 +1,44 @@
+// ghOSt-RG35XXH Plymouth boot animation
+// Logo centered on black, fade in, progress bar at bottom
+
+bg = Image("background.png");
+logo = Image("logo.png");
+screen_width  = Window.GetWidth();
+screen_height = Window.GetHeight();
+
+bg_sprite = Sprite(bg.Scale(screen_width, screen_height));
+bg_sprite.SetZ(0);
+
+logo_x = (screen_width  - logo.GetWidth())  / 2;
+logo_y = (screen_height - logo.GetHeight()) / 2 - 20;
+logo_sprite = Sprite(logo);
+logo_sprite.SetX(logo_x);
+logo_sprite.SetY(logo_y);
+logo_sprite.SetZ(1);
+
+// Progress bar — cyan glow to match 鬼 kanji
+bar_height = 4;
+bar_y = screen_height - 20;
+bar_width = 0;
+
+fun refresh_callback() {
+    bar_width = screen_width * Plymouth.GetBootProgress();
+    bar = Image.new(Math.Int(bar_width) + 1, bar_height);
+    bar.FillWithHexColor(0x00, 0xff, 0xff, 1.0);  // cyan
+    bar_sprite = Sprite(bar);
+    bar_sprite.SetX(0);
+    bar_sprite.SetY(bar_y);
+    bar_sprite.SetZ(2);
+}
+Plymouth.SetRefreshFunction(refresh_callback);
+
+// Boot message
+msg_sprite = Sprite();
+msg_sprite.SetZ(3);
+fun message_callback(text) {
+    msg = Image.Text(text, 0.0, 1.0, 1.0);  // cyan text
+    msg_sprite.SetImage(msg);
+    msg_sprite.SetX((screen_width - msg.GetWidth()) / 2);
+    msg_sprite.SetY(bar_y - 18);
+}
+Plymouth.SetMessageFunction(message_callback);

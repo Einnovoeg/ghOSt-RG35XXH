@@ -415,7 +415,7 @@ WantedBy=multi-user.target
 EOF
 systemctl enable cyberchef
 
-# Cage compositor (main GUI)
+# Cage compositor (fallback GUI when UI_MODE=cage; XFCE+LightDM is default)
 cat > /etc/systemd/system/ghost-gui.service << EOF
 [Unit]
 Description=ghOSt GUI (Cage + Launcher)
@@ -434,7 +434,29 @@ RestartSec=3
 [Install]
 WantedBy=graphical.target
 EOF
-systemctl enable ghost-gui
+# Only enable cage when LightDM/XFCE is NOT present. When the XFCE UI stage ran
+# (LightDM installed), LightDM owns the graphical session and cage would fight
+# for the display. ghOSt launcher stays available as XFCE menu entry.
+if [ -x /usr/sbin/lightdm ] || [ -x /usr/bin/Xorg ]; then
+    log "LightDM/Xorg detected — XFCE owns display, disabling cage ghost-gui (fallback kept)"
+    systemctl disable ghost-gui 2>/dev/null || true
+    mkdir -p /etc/lightdm/lightdm.conf.d
+    cat > /etc/lightdm/lightdm.conf.d/50-autologin.conf << EOF
+[Seat:*]
+autologin-user=$GHOST_USER
+autologin-user-timeout=0
+user-session=xfce
+EOF
+    systemctl enable lightdm 2>/dev/null || true
+    # Handheld services from cyberdeck port (already in overlay/, enable here too
+    # in case overlay was applied before these units existed in a cached rootfs)
+    systemctl enable joy2mouse.service 2>/dev/null || true
+    systemctl enable wifi-watchdog.service 2>/dev/null || true
+    systemctl enable expand-rootfs.service 2>/dev/null || true
+    systemctl enable usb-mtp.service 2>/dev/null || true
+else
+    systemctl enable ghost-gui
+fi
 
 # Auto-login to ghost user
 mkdir -p /etc/systemd/system/getty@tty1.service.d
@@ -568,10 +590,23 @@ vm.min_free_kbytes=65536
 EOF
 
 # =============================================================================
-# FSTAB (UUIDs filled in by assemble_image)
+# FSTAB (BOOT_FLOW-aware: LABELs for rocknix MBR, UUIDs for legacy GPT)
+# image/pack-image-rocknix.sh rewrites fstab again at pack time, so this is
+# a safe default for both flows. Legacy assemble_image replaces ROOT/SWAP_UUID.
 # =============================================================================
 log "Writing fstab..."
-cat > /etc/fstab << 'EOF'
+if [ -x /usr/sbin/lightdm ] || grep -q "LABEL=rootfs" /etc/fstab 2>/dev/null; then
+    # Rocknix MBR layout: p1 FAT BOOT, p2 ext4 rootfs (see boot.cmd root=/dev/mmcblk0p2)
+    cat > /etc/fstab << 'EOF'
+# ghOSt fstab — rocknix MBR layout (BOOT vfat + rootfs ext4, LABEL-based)
+LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
+LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
+proc           /proc    proc   defaults                             0 0
+tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0
+# zram swap handled by zramswap service (priority 100)
+EOF
+else
+    cat > /etc/fstab << 'EOF'
 # ghOSt fstab — noatime + tmpfs for SD card longevity
 # UUIDs are replaced during image assembly
 
@@ -586,6 +621,7 @@ tmpfs           /run      tmpfs defaults,nosuid,nodev,size=32M                  
 
 # zram swap is handled by zramswap service (priority 100, hits before SD swap)
 EOF
+fi
 
 # =============================================================================
 # AUTO-CPUFREQ CONFIGURATION

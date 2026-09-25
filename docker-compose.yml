@@ -16,10 +16,11 @@ services:
     # Required for loop device access during image assembly
     privileged: true
 
-    # Output directory — .img.gz appears here on your host
+    # Output directory — .img.xz + .bmap appear here on your host
     volumes:
       - ./output:/opt/ghost-build/output
       # Persistent build workspaces — survive rebuilds and let failed runs resume
+      - ghost-rocknix-cache:/opt/ghost-build/rocknix
       - ghost-kernel-cache:/opt/ghost-build/kernel
       - ghost-uboot-cache:/opt/ghost-build/uboot
       - ghost-rootfs-cache:/opt/ghost-build/rootfs
@@ -36,6 +37,9 @@ services:
 
     environment:
       - GHOST_TIMEZONE=UTC
+      - BOOT_FLOW=rocknix
+      - UI_MODE=xfce
+      - DEBIAN_RELEASE=trixie
       - KALI_SIZE=default
       - GAMES_PROFILE=lean
       - INCLUDE_PORTMASTER=false
@@ -50,6 +54,8 @@ services:
       # - SKIP_IMAGE=true
 
 volumes:
+  ghost-rocknix-cache:
+    driver: local
   ghost-kernel-cache:
     driver: local
   ghost-uboot-cache:

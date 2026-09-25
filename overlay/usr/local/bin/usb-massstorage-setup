@@ -1,0 +1,8 @@
+#!/bin/bash
+# usb-massstorage-setup — stub (MTP is default on H700; mass-storage conflicts with MTP).
+# Kept so usb-massstorage.service does not fail when enabled manually.
+# To actually export mass storage, disable usb-mtp.service first, then:
+#   modprobe g_mass_storage file=/dev/mmcblk0p2 removable=1  (example)
+set -e
+echo "[mass-storage] stub: disable usb-mtp.service and load g_mass_storage manually if needed." | logger -t usb-massstorage || true
+exit 0

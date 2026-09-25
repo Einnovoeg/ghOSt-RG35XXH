@@ -1,0 +1,5 @@
+#!/bin/bash
+# usb-massstorage-stop — stub companion to usb-massstorage-setup.
+set -e
+rmmod g_mass_storage 2>/dev/null || true
+exit 0

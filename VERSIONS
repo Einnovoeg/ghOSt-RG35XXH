@@ -1,0 +1,27 @@
+# Pinned versions for reproducible ghOSt boot (ported from rg35xxh-cyberdeck).
+# Bump only when intentionally rebasing. CI cache is keyed on this file.
+# See docs/PITFALLS-cyberdeck.md for why each pin exists.
+
+ROCKNIX_REPO=https://github.com/ROCKNIX/distribution.git
+ROCKNIX_COMMIT=ebcca488969f4605f7353ef0906a1f150e6268a1
+ROCKNIX_BRANCH=next
+
+# Debian release for the bootable rootfs.
+# Trixie (gcc 14) is required: Bookworm gcc-12 cannot build kernel modules
+# with flags emitted by the ROCKNIX gcc-15 toolchain (-fmin-function-alignment).
+DEBIAN_RELEASE=trixie
+DEBIAN_MIRROR=http://deb.debian.org/debian
+
+KERNEL_NAME=linux-7.1.2
+TOOLCHAIN_GCC=16.2.0
+
+UBOOT_PKG=u-boot
+DEVICE=H700
+ARCH=aarch64
+DTB_NAME=sun50i-h700-anbernic-rg35xx-h.dtb
+
+# Final SD image size (GB). Rootfs expands to fill larger cards on first boot.
+IMAGE_SIZE_GB=12
+
+# Desktop user created in the XFCE stage. ghOSt uses 'ghost' (not upstream 'hataketsu').
+TARGET_USER=ghost

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dump boot diagnostics to /boot/logs for SD-card debugging
+After=multi-user.target
+ConditionPathExists=/boot/logs
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/dump-boot-logs.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

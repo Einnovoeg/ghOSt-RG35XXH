@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=hey AI Assistant
+Comment=Voice and text AI assistant (Claude/GPT/Gemini)
+Exec=/usr/local/bin/hey -t
+Icon=ai
+Terminal=true
+Categories=Utility;Network;
+StartupNotify=false

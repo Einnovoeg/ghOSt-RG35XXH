@@ -63,12 +63,15 @@ RUN echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries \
     binfmt-support \
     # Debootstrap
     debootstrap \
-    # Image assembly tools
+    # Image assembly tools (rocknix MBR layout needs vfat/bmap/gdisk/dtc)
     parted \
     kpartx \
     dosfstools \
     e2fsprogs \
     bmap-tools \
+    gdisk \
+    device-tree-compiler \
+    u-boot-tools \
     # Download tools
     wget \
     curl \
@@ -123,7 +126,12 @@ COPY . /ghost/
 RUN chmod +x \
     /ghost/build.sh \
     /ghost/kernel/build-kernel.sh \
+    /ghost/kernel/build-rocknix.sh \
     /ghost/rootfs/build-rootfs.sh \
+    /ghost/rootfs/build-ui-xfce.sh \
+    /ghost/image/pack-image-rocknix.sh \
+    /ghost/scripts/build-joypad-module.sh \
+    /ghost/scripts/patch-h700-dtb-regulators.py \
     /ghost/overlay/opt/ghost/scripts/configure.sh \
     /ghost/launcher/launcher.py \
     /ghost/stealthd/stealthd.py \

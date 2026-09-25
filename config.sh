@@ -68,16 +68,33 @@ INCLUDE_STEALTH="${INCLUDE_STEALTH:-true}"
 COMPRESS_IMAGE="${COMPRESS_IMAGE:-true}"
 
 # -----------------------------------------------------------------------------
+# BOOT FLOW (boot fix ported from rg35xxh-cyberdeck)
+# "rocknix" (default, boots): ROCKNIX mainline kernel 7.x + U-Boot SPL @8KB +
+#   MBR + FAT /boot (Image+DTB+boot.scr) + ext4 rootfs + DTB regulator fix.
+# "legacy" (does not boot reliably): KNULLI 4.9 vendor chain + GPT layout.
+#   Kept only for comparison / hardware bring-up experiments.
+# -----------------------------------------------------------------------------
+BOOT_FLOW="${BOOT_FLOW:-rocknix}"
+
+# Desktop UI: "xfce" (default, boots + usable) | "cage" (minimal launcher-only)
+# XFCE = LightDM autologin + joy2mouse + battery widget + audio + brightness.
+# Cage fallback still available via ghost-gui.service when UI_MODE=cage.
+UI_MODE="${UI_MODE:-xfce}"
+INCLUDE_XFCE="${INCLUDE_XFCE:-true}"
+
+# Final image size for rocknix flow (GB). Rootfs expands to fill SD on 1st boot.
+IMAGE_SIZE_GB="${IMAGE_SIZE_GB:-12}"
+
+# -----------------------------------------------------------------------------
 # H700 BOOT CHAIN SOURCE
-# KNULLI ships known-good RG35XXH boot partitions and matching 4.9.170 modules.
-# We stage those assets directly instead of rebuilding the vendor boot chain.
+# Legacy KNULLI path (BOOT_FLOW=legacy only). Rocknix path uses VERSIONS pins.
 # -----------------------------------------------------------------------------
 KNULLI_DIST_REPO="https://github.com/knulli-cfw/distribution"
 KNULLI_DIST_BRANCH="knulli-main"
 KNULLI_H700_BOARD_PATH="board/batocera/allwinner/h700/rg35xx-h"
 KNULLI_H700_COMMON_PATH="board/batocera/allwinner/h700"
 
-# Reference kernel version from the staged KNULLI runtime.
+# Reference kernel version from the staged KNULLI runtime (legacy only).
 KERNEL_VERSION="4.9.170"
 
 # Cross compiler
@@ -86,10 +103,16 @@ ARCH="arm64"
 
 # -----------------------------------------------------------------------------
 # DEBIAN BOOTSTRAP
+# Trixie default: Bookworm gcc-12 cannot build out-of-tree modules with flags
+# emitted by the ROCKNIX gcc-15 toolchain. Override to bookworm only for
+# BOOT_FLOW=legacy experiments.
 # -----------------------------------------------------------------------------
 DEBIAN_MIRROR="http://deb.debian.org/debian"
-DEBIAN_RELEASE="bookworm"
+DEBIAN_RELEASE="${DEBIAN_RELEASE:-trixie}"
 DEBIAN_ARCH="arm64"
+
+# DTB for retail RG35XXH (NOT rev6-panel which shows 1 white line on retail).
+DTB_NAME="${DTB_NAME:-sun50i-h700-anbernic-rg35xx-h.dtb}"
 
 # -----------------------------------------------------------------------------
 # KALI REPOSITORY

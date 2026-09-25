@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ghOSt Launcher
+Comment=Controller-friendly security workstation menu
+Exec=/usr/bin/python3 /opt/ghost/launcher/launcher.py
+Icon=applications-system
+Terminal=false
+Categories=System;Security;
+StartupNotify=false

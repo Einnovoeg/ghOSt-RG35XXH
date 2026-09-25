@@ -2,7 +2,15 @@
 
 ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default build prioritizes signal intelligence, recon, wireless tooling, stealth workflows, and low-RAM operation on a 1GB ARM device. Gaming and compatibility layers remain optional extras, not the center of the image.
 
-## Build
+> **Boot fix (2026-09):** default `BOOT_FLOW=rocknix` ports the proven
+> [rg35xxh-cyberdeck](https://github.com/Einnovoeg/rg35xxh-cyberdeck) boot chain
+> (ROCKNIX mainline kernel 7.x without embedded initramfs, AXP717
+> regulator-always-on DTB fix, MBR + SPL@8KB + FAT /boot + ext4 rootfs) and its
+> XFCE UI (LightDM autologin, joy2mouse, WiFi watchdog, MTP, battery widget).
+> Legacy KNULLI 4.9 + GPT (`BOOT_FLOW=legacy`) is kept for experiments only.
+> See `docs/PITFALLS-cyberdeck.md`, `VERSIONS`, `image/pack-image-rocknix.sh`.
+
+## Build (local)
 
 Docker is the fastest path:
 
@@ -15,9 +23,26 @@ Native builds are still supported on Ubuntu 22.04 or 24.04 x86_64:
 
 ```bash
 sudo ./build.sh
+# BOOT_FLOW=rocknix UI_MODE=xfce is the default (boots).
+# BOOT_FLOW=legacy is experimental only.
 ```
 
-When the build completes, flash `output/ghOSt-RG35XXH-1.0.0.img.gz` to an SD card.
+When the build completes, flash `build/output/ghOSt-RG35XXH-*.img.xz` to an SD card:
+
+```bash
+xz -d build/output/ghOSt-*.img.xz
+sudo bmaptool copy build/output/ghOSt-*.img /dev/sdX
+```
+
+## Build from GitHub (CI — no local Linux needed)
+
+1. Push to `main` (builds + uploads `ghost-rg35xxh-image` artifact), or
+2. Tag `v*` (e.g. `git tag v1.0.1 && git push origin v1.0.1`) for a Release with
+   `.img.xz + .bmap + SHA256SUMS`, or
+3. Actions → `build` → Run workflow (choose `boot_flow` / `ui_mode`).
+
+Workflow: `.github/workflows/build.yml` (cache keyed on `VERSIONS`; kernel
+rebuild only when pins change). Artifacts retained 14 days.
 
 ## Host Requirements
 
@@ -52,12 +77,14 @@ The launcher now hides optional entries when the underlying tool is not present,
 
 ## Included by Default
 
-### Core platform
-- Debian Bookworm ARM64 rootfs
-- KNULLI H700 boot chain and runtime assets for the RG35XXH
-- Cage/Wayland launcher stack with SDL2 frontend
-- zram plus a dedicated swap partition
-- `noatime`, long journal commit interval, and tmpfs/log reductions for SD-card longevity
+### Core platform (rocknix boot flow)
+- Debian Trixie ARM64 rootfs (Bookworm gcc-12 cannot build modules for the gcc-15 kernel)
+- ROCKNIX mainline kernel 7.x + U-Boot SPL@8KB, patched DTB (regulator-always-on)
+- MBR layout: p1 FAT32 BOOT (Image+DTB+boot.scr), p2 ext4 rootfs (LABEL-based fstab)
+- XFCE 4.20 + LightDM autologin to `ghost` (joy2mouse: left stick=mouse, A/B/Y=click, R-stick=scroll)
+- ghOSt launcher kept as XFCE menu entry (`ghost-launcher.desktop`) + cage fallback (`UI_MODE=cage`)
+- zram (prio 100) + tmpfs/log reductions for SD-card longevity
+- WiFi watchdog, MTP gadget (port 1), UPower battery fix, backlight polkit, `play480`/`setvol`
 
 ### Shell and operator workflow
 - Fish, tmux, micro, vim, bat, ripgrep, fzf, zoxide, btop, ncdu, duf, glow
@@ -107,17 +134,23 @@ The first-boot flow focuses on operator setup:
 5. Join WiFi.
 6. Create the stealth ROM directory and explain the stealth hotkey.
 
-## Partition Layout
+## Partition Layout (rocknix, bootable)
 
-Default image layout:
+Default image layout (`IMAGE_SIZE_GB=12`, expands to fill SD on first boot via `expand-rootfs.service`):
 
 ```text
-mmcblk0p1   FAT32     64MB    boot assets
-mmcblk0p2   ext4      16GB    rootfs
-mmcblk0p3   swap       4GB    swap at the end of the card
+mmcblk0p1   FAT32     256MB   BOOT (Image, DTB, boot.scr/boot.cmd)
+mmcblk0p2   ext4      rest    rootfs (LABEL=rootfs)
 ```
 
-If you want a larger root partition in the generated image, raise `ROOT_SIZE_MB` before building.
+Legacy GPT layout (`BOOT_FLOW=legacy`, experimental, does not boot reliably):
+
+```text
+mmcblk0p1   raw       20MB    boot0
+mmcblk0p2   raw       16MB    env
+mmcblk0p3   ext4      16GB    rootfs (ROOT_SIZE_MB)
+mmcblk0p4   swap       4GB    swap (SWAP_SIZE_MB)
+```
 
 ## USB-C Host Mode
 

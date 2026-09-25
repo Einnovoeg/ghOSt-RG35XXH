@@ -159,20 +159,39 @@ preflight() {
 }
 
 # =============================================================================
-# STEP 1: KERNEL BUILD
+# STEP 1: KERNEL BUILD (BOOT_FLOW dispatch — rocknix boots, legacy does not)
 # =============================================================================
 build_kernel() {
-    section "Building H700 Kernel"
-    bash "$SCRIPT_DIR/kernel/build-kernel.sh"
-    log "Kernel build complete"
+    if [[ "${BOOT_FLOW:-rocknix}" == "rocknix" ]]; then
+        section "Building H700 Kernel (ROCKNIX mainline — proven boot path)"
+        bash "$SCRIPT_DIR/kernel/build-rocknix.sh" all
+        if command -v docker >/dev/null 2>&1; then
+            bash "$SCRIPT_DIR/scripts/build-joypad-module.sh" || \
+                warn "Joypad module build failed — joy2mouse will retry at boot"
+        else
+            warn "Docker unavailable — skipping joypad .ko (CI builds it)"
+        fi
+        log "Kernel build complete"
+    else
+        section "Building H700 Kernel (LEGACY KNULLI 4.9 — experimental)"
+        warn "BOOT_FLOW=legacy does not boot reliably; use rocknix for flashing."
+        bash "$SCRIPT_DIR/kernel/build-kernel.sh"
+        log "Kernel build complete"
+    fi
 }
 
 # =============================================================================
 # STEP 2: ROOTFS BOOTSTRAP
 # =============================================================================
 build_rootfs() {
-    section "Bootstrapping Debian Bookworm ARM64 Rootfs"
+    section "Bootstrapping Debian ${DEBIAN_RELEASE} ARM64 Rootfs"
     bash "$SCRIPT_DIR/rootfs/build-rootfs.sh"
+    if is_enabled "${INCLUDE_XFCE:-true}"; then
+        section "Installing XFCE UI (cyberdeck port — joystick mouse, LightDM)"
+        bash "$SCRIPT_DIR/rootfs/build-ui-xfce.sh" "$ROOTFS_DIR"
+    else
+        warn "INCLUDE_XFCE=false — keeping cage-only UI (no desktop)"
+    fi
     log "Rootfs build complete"
 }
 
@@ -264,9 +283,22 @@ configure_chroot() {
 }
 
 # =============================================================================
-# STEP 5: ASSEMBLE IMAGE
+# STEP 5: ASSEMBLE IMAGE (BOOT_FLOW dispatch)
+# rocknix: MBR + SPL@8KB + FAT BOOT + ext4 rootfs (proven to boot, see
+#   docs/PITFALLS-cyberdeck.md). Produces .img + .bmap + .img.xz + SHA256SUMS.
+# legacy: GPT + KNULLI boot0/boot_package blobs (kept for experiments).
 # =============================================================================
 assemble_image() {
+    if [[ "${BOOT_FLOW:-rocknix}" == "rocknix" ]]; then
+        section "Assembling Flash Image (ROCKNIX MBR — bootable)"
+        bash "$SCRIPT_DIR/image/pack-image-rocknix.sh"
+        log "Image created in $OUTPUT_DIR (flash: sudo bmaptool copy *.img /dev/sdX)"
+        return 0
+    fi
+    assemble_image_legacy
+}
+
+assemble_image_legacy() {
     section "Assembling Flash Image"
 
     local img="$OUTPUT_DIR/ghOSt-RG35XXH-${GHOST_VERSION}.img"
@@ -371,9 +403,35 @@ assemble_image() {
 }
 
 # =============================================================================
-# MAIN
+# MAIN (+ CI stage dispatch: ./build.sh [all|fetch|docker|kernel|rootfs|image])
+# GitHub Actions calls individual stages; local default (no arg) runs all.
+# SKIP_* envs still honored for Docker/local iteration.
 # =============================================================================
 main() {
+    local stage="${1:-all}"
+    # CI stage-only mode (no preflight banner duplication)
+    case "$stage" in
+        fetch|docker|kernel|rootfs|image)
+            mkdir -p "$BUILD_DIR" "$OUTPUT_DIR" "$ROOTFS_DIR" \
+                     "$KERNEL_BUILD_DIR" "$UBOOT_BUILD_DIR"
+            case "$stage" in
+                fetch)  bash "$SCRIPT_DIR/kernel/build-rocknix.sh" fetch ;;
+                docker) bash "$SCRIPT_DIR/kernel/build-rocknix.sh" docker ;;
+                kernel) build_kernel ;;
+                rootfs)
+                    # rootfs stage assumes debootstrap base exists; build full rootfs+UI
+                    build_rootfs
+                    apply_overlay
+                    configure_chroot
+                    ;;
+                image)  assemble_image ;;
+            esac
+            return 0
+            ;;
+        all|"") ;;
+        *) error "unknown stage: $stage (try: all|fetch|docker|kernel|rootfs|image)" ;;
+    esac
+
     echo -e "${CYAN}"
     cat << 'EOF'
   ██████╗ ██╗  ██╗ ██████╗ ███████╗████████╗
@@ -387,6 +445,8 @@ EOF
     echo -e "${NC}"
     echo -e "  Device:  ${BOLD}${DEVICE_TARGET}${NC}"
     echo -e "  Version: ${BOLD}${GHOST_VERSION}${NC}"
+    echo -e "  Boot:    ${BOLD}${BOOT_FLOW:-rocknix}${NC} (rocknix=boots, legacy=experimental)"
+    echo -e "  UI:      ${BOLD}${UI_MODE:-xfce}${NC} (xfce=LightDM desktop, cage=launcher-only)"
     echo -e "  Toolset: ${BOLD}${KALI_SIZE}${NC}"
     echo -e "  Extras:  ${BOLD}${GAMES_PROFILE}${NC}"
     echo ""

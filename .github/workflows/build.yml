@@ -1,0 +1,96 @@
+name: build
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      boot_flow:
+        description: 'Boot flow (rocknix=boots, legacy=experimental)'
+        required: false
+        default: 'rocknix'
+      ui_mode:
+        description: 'UI mode (xfce=desktop, cage=launcher-only)'
+        required: false
+        default: 'xfce'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      BOOT_FLOW: ${{ inputs.boot_flow || 'rocknix' }}
+      UI_MODE: ${{ inputs.ui_mode || 'xfce' }}
+      DEBIAN_RELEASE: trixie
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap qemu-user-static binfmt-support \
+            kpartx parted gdisk dosfstools xz-utils bmap-tools \
+            device-tree-compiler rsync u-boot-tools git curl python3
+          sudo systemctl restart binfmt-support || true
+
+      - name: Cache ROCKNIX build tree
+        uses: actions/cache@v4
+        with:
+          path: build/rocknix
+          key: rocknix-${{ hashFiles('VERSIONS') }}
+
+      - name: Build kernel + u-boot (ROCKNIX, no embedded initramfs + DTB regulator fix)
+        run: |
+          chmod +x kernel/build-rocknix.sh scripts/build-joypad-module.sh
+          ./kernel/build-rocknix.sh fetch
+          ./kernel/build-rocknix.sh docker
+          ./kernel/build-rocknix.sh kernel
+          ./kernel/build-rocknix.sh dtb
+          ./scripts/build-joypad-module.sh || echo "joypad module optional, continuing"
+
+      - name: Build rootfs (Debian Trixie + ghOSt tools)
+        run: |
+          sudo ./build.sh rootfs
+        env:
+          BOOT_FLOW: rocknix
+
+      - name: Pack image (MBR + SPL@8KB + FAT BOOT + ext4 rootfs)
+        run: |
+          sudo ./build.sh image
+        env:
+          BOOT_FLOW: rocknix
+
+      - name: Compute checksums
+        run: |
+          cd build/output
+          sha256sum *.img.xz *.bmap > SHA256SUMS || sha256sum *.img.xz > SHA256SUMS
+          ls -lh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghost-rg35xxh-image
+          path: build/output/*
+          retention-days: 14
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ghost-rg35xxh-image
+          path: dist
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-rc') || contains(github.ref, '-alpha') || contains(github.ref, '-beta') }}

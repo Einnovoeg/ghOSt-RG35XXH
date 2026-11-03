@@ -120,7 +120,14 @@ case "$src" in
 esac
 exit 0
 EOS
-    printf '#!/bin/sh\nexit 0\n' > "$H/bin/mdir"
+    cat > "$H/bin/mdir" <<'EOS'
+#!/bin/sh
+case "$*" in
+  *"-b"*) echo '::/Image'; echo '::/device_trees/' ;;
+  *) echo 'Volume in drive : is GHOST'; echo ' Image        4096 2026-11-01' ;;
+esac
+exit 0
+EOS
     printf '#!/bin/sh\nexit 0\n' > "$H/bin/gzip"
     printf '#!/bin/sh\nexit 0\n' > "$H/bin/dd"
     chmod +x "$H/bin"/*

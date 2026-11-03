@@ -2,17 +2,18 @@
 # =============================================================================
 # ghOSt boot payload from a proven ROCKNIX release
 #
-# Why this exists: ghOSt builds a kernel from source, and that kernel has never
-# been demonstrated to boot on the hardware. ROCKNIX publishes a release image
+# Why this exists: ghOSt used to build a kernel from source, and that kernel was
+# never demonstrated to boot on the hardware. ROCKNIX publishes a release image
 # for the H700 that does boot, on units with both screen panels. This script
-# takes the kernel, device trees, U-Boot and matching modules out of that image
-# and stages them where ghOSt's own packer expects them — so ghOSt ships a
-# kernel that is known to work instead of one it hopes works.
+# takes the kernel, device trees, U-Boot and the matching modules and firmware
+# out of that image and stages them where ghOSt's own packer expects them — so
+# ghOSt ships a kernel that is known to work instead of one it hopes works.
 #
 # Extraction is loop-free on purpose (same constraint as image assembly): the
 # partition table is read with sfdisk, the FAT boot partition is read with
-# mtools at an offset, and the ext4 partition is copied out and read with
-# debugfs. No mount, no losetup, no device-mapper.
+# mtools at an offset, an ext4 partition is copied out and read with debugfs,
+# and a squashfs root filesystem is read with unsquashfs. No mount, no losetup,
+# no device-mapper.
 # =============================================================================
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -82,7 +83,7 @@ PY
 
 # --- find the FAT boot partition and the ext4 root partition ----------------
 FAT_OFF=""; FAT_INDEX=""
-ROOT_OFF=""; ROOT_SIZE=""; ROOT_INDEX=""
+ROOT_OFF=""; ROOT_SIZE=0; ROOT_INDEX=""
 while IFS=$'\t' read -r idx start size; do
     off=$(( start * 512 ))
     kind="$(blkid -p -O "$off" -o value -s TYPE "$IMG" 2>/dev/null || true)"
@@ -93,83 +94,114 @@ while IFS=$'\t' read -r idx start size; do
     log "partition $idx: offset $off, $(( size * 512 / 1024 / 1024 ))MiB, type ${kind:-unknown}"
     case "$kind" in
         vfat|msdos*) [[ -n "$FAT_OFF" ]] || { FAT_OFF="$off"; FAT_INDEX="$idx"; } ;;
-        # a release can carry several ext4 partitions (recovery, data); the
-        # root filesystem is the big one
+        # a release can carry several ext4 partitions (recovery, storage); the
+        # root filesystem, when there is one, is the big one
         ext4|ext3|ext2) if (( size > ROOT_SIZE )); then
-                           ROOT_OFF="$off"; ROOT_SIZE="$size"; ROOT_INDEX="$idx"
-                       fi ;;
+                            ROOT_OFF="$off"; ROOT_SIZE="$size"; ROOT_INDEX="$idx"
+                        fi ;;
     esac
 done < "$WORK/parts.tsv"
 
 [[ -n "$FAT_OFF" ]] || error "no FAT boot partition found in $IMG (table: $(tr '\n' ' ' < "$WORK/sf.txt"))"
-[[ -n "$ROOT_OFF" ]] || error "no ext4 root partition found in $IMG (table: $(tr '\n' ' ' < "$WORK/sf.txt"))"
-log "boot partition: p$FAT_INDEX (offset $FAT_OFF), rootfs: p$ROOT_INDEX"
+log "boot partition: p$FAT_INDEX (offset $FAT_OFF)"
 
 # --- pull the boot partition out with mtools (no mount) ---------------------
-mkdir -p "$WORK/boot"
+BOOT_SRC="$WORK/boot"
+mkdir -p "$BOOT_SRC"
 log "reading the FAT boot partition"
 mdir -b -i "$IMG@@$FAT_OFF" ::/ > "$WORK/boot-listing.txt" 2>/dev/null || true
+mdir -i "$IMG@@$FAT_OFF" ::/ > "$WORK/boot-sizes.txt" 2>/dev/null || true
+sed 's/^/    /' "$WORK/boot-sizes.txt" | head -20
 # Copy every entry by name. An mtools wildcard (::/* or ::*) skips top-level
 # files on some builds while still copying directories, which loses the kernel
 # image without any error, so each entry is resolved explicitly.
 copied=0
 while IFS= read -r entry; do
     [[ -n "$entry" ]] || continue
-    if mcopy -s -o -i "$IMG@@$FAT_OFF" "::/$entry" "$WORK/boot/" 2>/dev/null; then
+    if mcopy -s -o -i "$IMG@@$FAT_OFF" "::/$entry" "$BOOT_SRC/" 2>/dev/null; then
         copied=$(( copied + 1 ))
     fi
 done < <(mdir -b -i "$IMG@@$FAT_OFF" ::/ 2>/dev/null | sed 's#^::/##; s#\r$##')
 if (( copied == 0 )); then
-    mcopy -s -i "$IMG@@$FAT_OFF" "::*" "$WORK/boot/" 2>/dev/null || \
+    mcopy -s -i "$IMG@@$FAT_OFF" "::*" "$BOOT_SRC/" 2>/dev/null || \
         warn "could not copy the boot partition"
 fi
 log "boot partition entries copied: $copied"
 
-# --- pull what we need out of the ext4 rootfs -------------------------------
-ROOT_PART="$WORK/root.part"
-log "extracting the rootfs partition ($(( ROOT_SIZE * 512 / 1024 / 1024 ))MiB) to read modules and U-Boot"
-if (( ROOT_OFF % 1048576 == 0 && ROOT_SIZE % 2048 == 0 )); then
-    dd if="$IMG" of="$ROOT_PART" bs=1M skip=$(( ROOT_OFF / 1048576 )) \
-       count=$(( ROOT_SIZE / 2048 )) status=none
-else
-    dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
+# --- the root filesystem: an ext4 partition, or a squashfs image on FAT ----
+ROOT_SRC=""
+if [[ -n "$ROOT_OFF" ]]; then
+    ROOT_PART="$WORK/root.part"
+    log "extracting the ext4 partition p$ROOT_INDEX ($(( ROOT_SIZE * 512 / 1024 / 1024 ))MiB)"
+    if (( ROOT_OFF % 1048576 == 0 && ROOT_SIZE % 2048 == 0 )); then
+        dd if="$IMG" of="$ROOT_PART" bs=1M skip=$(( ROOT_OFF / 1048576 )) \
+           count=$(( ROOT_SIZE / 2048 )) status=none
+    else
+        dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
+    fi
+    mkdir -p "$WORK/root"
+    for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
+        debugfs -R "rdump ${p} $WORK/x" "$ROOT_PART" > "$WORK/dbg.log" 2>&1 || true
+        src="$WORK/x/$(basename "$p")"
+        if [[ -d "$src" ]]; then
+            mkdir -p "$WORK/root$(dirname "$p")"
+            rm -rf "$WORK/root$p"
+            mv "$src" "$WORK/root$p"
+        fi
+        log "ext4 ${p}: $(find "$WORK/root$p" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
+    done
+    # keep it only if it actually held something we need; a small ext4 may be a
+    # recovery or storage partition rather than the root filesystem
+    if [[ -d "$WORK/root/lib/modules" || -d "$WORK/root/usr/share/bootloader" ]]; then
+        ROOT_SRC="$WORK/root"
+    else
+        warn "ext4 partition p$ROOT_INDEX holds no root filesystem; continuing"
+    fi
 fi
-# debugfs rdump copies the directory *itself* into the destination, so dumping
-# /lib/modules into $WORK/root/lib/modules would give lib/modules/modules/...
-# Instead every path is dumped into one flat holding area and read from there.
-DUMP="$WORK/rdump"
-mkdir -p "$DUMP"
-for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
-    debugfs -R "rdump ${p} ${DUMP}" "$ROOT_PART" > "$WORK/dbg.log" 2>&1 || true
-    n="$(find "$DUMP/$(basename "$p")" -type f 2>/dev/null | wc -l | tr -d ' ')"
-    log "rootfs ${p}: ${n} file(s)"
-    (( n > 0 )) || warn "  debugfs: $(head -2 "$WORK/dbg.log" | tr '\n' ' ')"
-done
+
+# ROCKNIX-style images keep the root filesystem as a squashfs image on the boot
+# partition, so look for one and read only the paths that matter out of it.
+SQUASH=""
+while IFS= read -r f; do
+    [[ -f "$f" ]] || continue
+    [[ "$(head -c 4 "$f" 2>/dev/null)" == "hsqs" ]] && { SQUASH="$f"; break; }
+done < <(find "$BOOT_SRC" -type f -size +1M 2>/dev/null | sort)
+if [[ -n "$SQUASH" ]]; then
+    log "squashfs root filesystem: $(basename "$SQUASH") ($(du -h "$SQUASH" | cut -f1))"
+    if command -v unsquashfs >/dev/null 2>&1; then
+        mkdir -p "$WORK/sq"
+        unsquashfs -q -d "$WORK/sq" "$SQUASH" \
+            lib/modules lib/firmware usr/lib/firmware usr/share/bootloader \
+            > "$WORK/unsquash.log" 2>&1 || warn "unsquashfs reported: $(tail -2 "$WORK/unsquash.log" | tr '\n' ' ')"
+        ROOT_SRC="$WORK/sq"
+    else
+        warn "unsquashfs is missing (apt install squashfs-tools); cannot read modules from the squashfs"
+    fi
+fi
+[[ -n "$ROOT_SRC" ]] || error "no root filesystem found: no large ext4 partition and no squashfs image on the boot partition"
 
 # --- find the pieces --------------------------------------------------------
-find_first() { # $1... = search roots, rest handled by caller predicate
-    find "$@" -maxdepth 4 2>/dev/null | head -1
-}
-
-IMAGE_SRC="$(find "$WORK/boot" "$DUMP/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
-[[ -n "$IMAGE_SRC" ]] || error "no kernel Image in the boot payload (boot listing: $(head -5 "$WORK/boot-listing.txt" | tr '\n' ' '))"
+IMAGE_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
+[[ -n "$IMAGE_SRC" ]] || error "no kernel Image in the payload (boot listing: $(head -8 "$WORK/boot-listing.txt" | tr '\n' ' '))"
 
 # bash 3.2 (macOS /bin/bash) has no mapfile, so build the list with a read loop
 DTBS=()
 while IFS= read -r d; do DTBS+=("$d"); done < <(
-    find "$WORK/boot" "$DUMP/bootloader" -maxdepth 4 \
+    find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -maxdepth 4 \
          \( -name '*rg35xx*.dtb' -o -name '*h700*.dtb' \) 2>/dev/null | sort -u)
-(( ${#DTBS[@]} )) || error "no device trees in the boot payload"
+(( ${#DTBS[@]} )) || error "no device trees in the payload"
 
-UBOOT_SRC="$(find "$DUMP/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
-[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$DUMP/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1)"
-[[ -n "$UBOOT_SRC" ]] || error "no U-Boot SPL in /usr/share/bootloader"
+UBOOT_SRC="$(find "$ROOT_SRC/usr/share/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
+[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1)"
+[[ -n "$UBOOT_SRC" ]] || warn "no U-Boot SPL in the payload; the packer needs one"
 
 # --- stage ------------------------------------------------------------------
 mkdir -p "$BOOT_STAGE" "$OVERLAY/lib/modules" "$OVERLAY/lib/firmware"
 cp "$IMAGE_SRC" "$BOOT_STAGE/Image"
-cp "$UBOOT_SRC" "$BOOT_STAGE/u-boot-sunxi-with-spl.bin"
-log "kernel: $(basename "$IMAGE_SRC") ($(du -h "$IMAGE_SRC" | cut -f1)), u-boot: $(basename "$UBOOT_SRC")"
+if [[ -n "$UBOOT_SRC" ]]; then
+    cp "$UBOOT_SRC" "$BOOT_STAGE/u-boot-sunxi-with-spl.bin"
+fi
+log "kernel: $(basename "$IMAGE_SRC") ($(du -h "$IMAGE_SRC" | cut -f1)), u-boot: ${UBOOT_SRC:+$(basename "$UBOOT_SRC")}"
 
 regular=""; rev6=""
 for d in "${DTBS[@]}"; do
@@ -185,24 +217,24 @@ done
 [[ -n "$rev6" ]] || warn "no rev6-panel device tree in this release; rev6 units keep dtb.img"
 cp "$BOOT_STAGE/dtb-regular.img" "$BOOT_STAGE/dtb.img"
 
-# modules + firmware must match this kernel exactly, so they come from the same image
-# Each module tree is named after its kernel version; keep that directory, or
-# modprobe looks in the wrong place and every driver silently fails to load.
+# modules + firmware must match this kernel exactly, so they come from the same
+# image. Each module tree is named after its kernel version; keep that
+# directory, or modprobe looks in the wrong place and no driver loads.
 mods=0 fw=0
 while IFS= read -r m; do
     [[ -d "$m" ]] || continue
     ver="$(basename "$m")"
     rsync -a "$m/" "$OVERLAY/lib/modules/$ver/"
-    log "modules: $ver"
+    log "modules: $ver ($(find "$m" -type f | wc -l | tr -d ' ') files)"
     mods=$(( mods + 1 ))
-done < <(find "$DUMP/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
-for f in "$DUMP/firmware"; do
+done < <(find "$ROOT_SRC/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+for f in "$ROOT_SRC/lib/firmware" "$ROOT_SRC/usr/lib/firmware"; do
     [[ -d "$f" ]] || continue
     rsync -a "$f/" "$OVERLAY/lib/firmware/"
     fw=$(( fw + 1 ))
 done
-(( mods > 0 )) || warn "no kernel modules found in the release rootfs"
-(( fw > 0 )) || warn "no firmware found in the release rootfs"
+(( mods > 0 )) || warn "no kernel modules found in the release root filesystem"
+(( fw > 0 )) || warn "no firmware found in the release root filesystem"
 log "staged $mods module tree(s) and firmware from $fw path(s)"
 
 log "boot payload ready:"

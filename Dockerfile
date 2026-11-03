@@ -56,6 +56,7 @@ RUN echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries \
     lzop \
     u-boot-tools \
     device-tree-compiler \
+    squashfs-tools \
     swig \
     python3-dev \
     # QEMU for ARM64 chroot
@@ -72,6 +73,7 @@ RUN echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries \
     bmap-tools \
     gdisk \
     device-tree-compiler \
+    squashfs-tools \
     u-boot-tools \
     # Download tools
     wget \

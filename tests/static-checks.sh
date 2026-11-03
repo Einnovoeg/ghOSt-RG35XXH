@@ -107,6 +107,18 @@ for t in tests/*-test.sh; do
         && ok "$name runs in the suite" || bad "$name is not wired into run-all.sh"
 done
 
+# firstboot must save API keys where hey actually reads them
+if grep -q '_key' hey/hey.py; then
+    grep -q 'f"{name}_key"' firstboot/firstboot-interactive.sh \
+        && ok "firstboot writes AI keys in hey's config.json format" \
+        || bad "firstboot does not write AI keys where hey reads them"
+    if grep -qE '\.\$\{KEY_NAME\}_key' firstboot/firstboot-interactive.sh; then
+        bad "firstboot writes a key file that hey.py never reads"
+    else
+        ok "no key is written to a file hey ignores"
+    fi
+fi
+
 # passwordless root in any stage would override the restricted sudo list
 grep -rq 'NOPASSWD: ALL' rootfs/ overlay/ 2>/dev/null \
     && bad "a build stage grants NOPASSWD: ALL" || ok "no passwordless root rule"

@@ -620,7 +620,7 @@ else
     cat > /etc/fstab << 'EOF'
 # ghOSt fstab — rocknix MBR layout (BOOT vfat + rootfs ext4, LABEL-based)
 # No swap partition: zramswap handles swap (priority 100).
-LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
+LABEL=rootfs   /        ext4   defaults,noatime,nodiratime,commit=600,errors=remount-ro  0 1
 LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
 proc           /proc    proc   defaults                             0 0
 tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0

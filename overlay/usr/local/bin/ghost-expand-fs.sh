@@ -73,9 +73,13 @@ fi
 if (( grew )); then
     partprobe "$DISK" 2>/dev/null || blockdev --rereadpt "$DISK" 2>/dev/null || true
     sleep 1
-    resize2fs "$ROOT_PART"
-    log "filesystem is now $(df -h / | awk 'NR==2 {print $2}') with $(df -h / | awk 'NR==2 {print $4}') free"
 fi
+
+# Resize unconditionally: growpart reports "no change" when the partition is
+# already the full card size, but the filesystem inside it can still be the
+# smaller one from the flashed image. resize2fs is a no-op once they match.
+resize2fs "$ROOT_PART" || { log "resize2fs failed on $ROOT_PART"; exit 1; }
+log "filesystem is now $(df -h / | awk 'NR==2 {print $2}') with $(df -h / | awk 'NR==2 {print $4}') free"
 
 touch "$DONE_FILE"
 log "done"

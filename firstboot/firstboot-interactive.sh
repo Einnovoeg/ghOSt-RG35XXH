@@ -111,17 +111,52 @@ EOF
     " 2>/dev/null || echo -e "${YELLOW}GPG setup skipped, use 'hey --setup' to configure keys later${NC}"
 fi
 
+# hey reads the key from config.json ("<provider>_key") or from the pass store.
+# Nothing reads a separate key file, so a key written anywhere else is lost.
+HEY_CONFIG="/home/$GHOST_USER/.config/ghost/hey/config.json"
+mkdir -p "$(dirname "$HEY_CONFIG")"
+HEY_KEY_HELPER="$(mktemp /tmp/ghost-hey-key.XXXXXX.py)"
+cat > "$HEY_KEY_HELPER" << 'PY'
+import json, pathlib, sys
+name, cfg_path = sys.argv[1], pathlib.Path(sys.argv[2])
+key = sys.stdin.read().strip()
+if not key:
+    sys.exit(1)
+cfg_path.parent.mkdir(parents=True, exist_ok=True)
+cfg = json.loads(cfg_path.read_text()) if cfg_path.exists() else {}
+cfg[f"{name}_key"] = key
+cfg.setdefault("default_model", "claude")
+cfg_path.write_text(json.dumps(cfg, indent=2))
+cfg_path.chmod(0o600)
+PY
+
+trap 'rm -f "$HEY_KEY_HELPER"' EXIT
+
+save_api_key() {   # $1 = provider name used by hey, $2 = key
+    local name="$1" key="$2"
+    # The key travels on stdin, never on a command line.
+    printf '%s' "$key" | python3 "$HEY_KEY_HELPER" "$name" "$HEY_CONFIG" 2>/dev/null || return 1
+    chown "$GHOST_USER:$GHOST_USER" "$HEY_CONFIG" 2>/dev/null || true
+    chmod 600 "$HEY_CONFIG"
+    # Mirror into the pass store too when it is usable; hey accepts either.
+    printf '%s\n' "$key" | su - "$GHOST_USER" \
+        -c "pass insert -m -f ghost/hey/$name" >/dev/null 2>&1 || true
+    return 0
+}
+
 for PROVIDER in "Anthropic Claude:anthropic" "OpenAI GPT-4o:openai" "Google Gemini:google"; do
     LABEL="${PROVIDER%%:*}"
     KEY_NAME="${PROVIDER##*:}"
     read -r -p "$LABEL API key (Enter to skip): " API_KEY
     if [[ -n "$API_KEY" ]]; then
-        su - "$GHOST_USER" -c "echo '$API_KEY' | pass insert -f ghost/hey/$KEY_NAME" 2>/dev/null || \
-            echo "$API_KEY" > "/home/$GHOST_USER/.config/ghost/hey/.${KEY_NAME}_key" && \
-            chmod 600 "/home/$GHOST_USER/.config/ghost/hey/.${KEY_NAME}_key"
-        echo -e "${GREEN}✓ $LABEL key saved${NC}"
+        if save_api_key "$KEY_NAME" "$API_KEY"; then
+            echo -e "${GREEN}✓ $LABEL key saved${NC}"
+        else
+            echo -e "${RED}Could not save the $LABEL key — run 'hey --setup' later${NC}"
+        fi
     fi
 done
+unset API_KEY
 echo ""
 
 # =============================================================================

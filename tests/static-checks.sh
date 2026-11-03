@@ -119,6 +119,25 @@ if grep -q '_key' hey/hey.py; then
     fi
 fi
 
+# handheld services must be enabled for every UI mode, not just inside a branch
+if grep -qE '^[[:space:]]+systemctl enable (joy2mouse|wifi-watchdog|usb-mtp|ghost-panel|ghost-wifi-import)' \
+        overlay/opt/ghost/scripts/configure.sh; then
+    bad "a handheld service is enabled only inside a UI branch"
+else
+    ok "handheld services are enabled for every UI mode"
+fi
+
+# no RTC on the H700: without a time source the device boots into 1970
+if grep -q 'systemd-timesyncd' rootfs/build-rootfs.sh && \
+   grep -q 'systemctl enable systemd-timesyncd' overlay/opt/ghost/scripts/configure.sh; then
+    ok "a network time source is installed and enabled"
+else
+    bad "no network time source: TLS and apt fail on a 1970 clock"
+fi
+grep -q 'fake-hwclock' rootfs/build-rootfs.sh \
+    && ok "fake-hwclock carries the clock across reboots" \
+    || bad "fake-hwclock missing: the clock restarts at the epoch every boot"
+
 # passwordless root in any stage would override the restricted sudo list
 grep -rq 'NOPASSWD: ALL' rootfs/ overlay/ 2>/dev/null \
     && bad "a build stage grants NOPASSWD: ALL" || ok "no passwordless root rule"

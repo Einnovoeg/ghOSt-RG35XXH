@@ -638,6 +638,7 @@ install_base() {
         lz4 zstd \
         e2fsprogs dosfstools parted cloud-guest-utils \
         util-linux procps \
+        systemd-timesyncd fake-hwclock \
         libpam-systemd \
         policykit-1 \
         python3 python3-pip python3-venv \

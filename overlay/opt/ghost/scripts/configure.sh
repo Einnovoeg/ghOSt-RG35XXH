@@ -382,6 +382,8 @@ cat > /etc/systemd/system/intercept.service << EOF
 [Unit]
 Description=ghOSt INTERCEPT Signal Intelligence Platform
 After=network.target
+# The checkout is a build-time clone; do not restart-loop when it is absent.
+ConditionPathExists=/opt/ghost/intercept/intercept.py
 
 [Service]
 Type=simple
@@ -402,6 +404,8 @@ cat > /etc/systemd/system/cyberchef.service << EOF
 [Unit]
 Description=ghOSt CyberChef Local Server
 After=network.target
+# Downloaded at build time; skip cleanly when the download failed.
+ConditionPathExists=/opt/ghost/cyberchef
 
 [Service]
 Type=simple
@@ -448,17 +452,26 @@ autologin-user-timeout=0
 user-session=xfce
 EOF
     systemctl enable lightdm 2>/dev/null || true
-    # Handheld services from cyberdeck port (already in overlay/, enable here too
-    # in case overlay was applied before these units existed in a cached rootfs)
-    systemctl enable joy2mouse.service 2>/dev/null || true
-    systemctl enable wifi-watchdog.service 2>/dev/null || true
-    # ghost-expand-fs.service is the single expander (enabled unconditionally below)
-    systemctl enable usb-mtp.service 2>/dev/null || true
-    systemctl enable ghost-panel.service 2>/dev/null || true
-    systemctl enable ghost-wifi-import.service 2>/dev/null || true
 else
     systemctl enable ghost-gui
 fi
+
+# Handheld services from the cyberdeck port. These have nothing to do with which
+# UI owns the display, so they are enabled for XFCE and cage builds alike. They
+# used to sit inside the LightDM branch, which left a cage image with no joypad
+# to mouse bridge, no MTP gadget, no panel check and no Wi-Fi import.
+# ghost-expand-fs.service is the single expander, enabled unconditionally below.
+systemctl enable joy2mouse.service 2>/dev/null || true
+systemctl enable wifi-watchdog.service 2>/dev/null || true
+systemctl enable usb-mtp.service 2>/dev/null || true
+systemctl enable ghost-panel.service 2>/dev/null || true
+systemctl enable ghost-wifi-import.service 2>/dev/null || true
+
+# Keep the clock sane. The H700 has no battery-backed RTC, so without a time
+# source the device boots into 1970 and every TLS handshake, apt run and AI API
+# call fails certificate validation.
+systemctl enable fake-hwclock 2>/dev/null || true
+systemctl enable systemd-timesyncd 2>/dev/null || true
 
 # Auto-login to ghost user
 mkdir -p /etc/systemd/system/getty@tty1.service.d

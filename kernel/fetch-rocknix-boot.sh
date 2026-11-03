@@ -90,15 +90,19 @@ while IFS=$'\t' read -r idx start size; do
         # blkid -O is not everywhere; identify by trying to read the filesystem.
         if mdir -i "$IMG@@$off" ::/ >/dev/null 2>&1; then kind="vfat"; fi
     fi
-    log "partition $idx: offset $off, type ${kind:-unknown}"
+    log "partition $idx: offset $off, $(( size * 512 / 1024 / 1024 ))MiB, type ${kind:-unknown}"
     case "$kind" in
         vfat|msdos*) [[ -n "$FAT_OFF" ]] || { FAT_OFF="$off"; FAT_INDEX="$idx"; } ;;
-        ext4|ext3|ext2) ROOT_OFF="$off"; ROOT_SIZE="$size"; ROOT_INDEX="$idx" ;;
+        # a release can carry several ext4 partitions (recovery, data); the
+        # root filesystem is the big one
+        ext4|ext3|ext2) if (( size > ROOT_SIZE )); then
+                           ROOT_OFF="$off"; ROOT_SIZE="$size"; ROOT_INDEX="$idx"
+                       fi ;;
     esac
 done < "$WORK/parts.tsv"
 
-[[ -n "$FAT_OFF" ]] || error "no FAT boot partition found in $IMG"
-[[ -n "$ROOT_OFF" ]] || error "no ext4 root partition found in $IMG"
+[[ -n "$FAT_OFF" ]] || error "no FAT boot partition found in $IMG (table: $(tr '\n' ' ' < "$WORK/sf.txt"))"
+[[ -n "$ROOT_OFF" ]] || error "no ext4 root partition found in $IMG (table: $(tr '\n' ' ' < "$WORK/sf.txt"))"
 log "boot partition: p$FAT_INDEX (offset $FAT_OFF), rootfs: p$ROOT_INDEX"
 
 # --- pull the boot partition out with mtools (no mount) ---------------------
@@ -124,15 +128,22 @@ log "boot partition entries copied: $copied"
 # --- pull what we need out of the ext4 rootfs -------------------------------
 ROOT_PART="$WORK/root.part"
 log "extracting the rootfs partition ($(( ROOT_SIZE * 512 / 1024 / 1024 ))MiB) to read modules and U-Boot"
-dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
+if (( ROOT_OFF % 1048576 == 0 && ROOT_SIZE % 2048 == 0 )); then
+    dd if="$IMG" of="$ROOT_PART" bs=1M skip=$(( ROOT_OFF / 1048576 )) \
+       count=$(( ROOT_SIZE / 2048 )) status=none
+else
+    dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
+fi
 # debugfs rdump copies the directory *itself* into the destination, so dumping
 # /lib/modules into $WORK/root/lib/modules would give lib/modules/modules/...
 # Instead every path is dumped into one flat holding area and read from there.
 DUMP="$WORK/rdump"
 mkdir -p "$DUMP"
 for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
-    debugfs -R "rdump ${p} ${DUMP}" "$ROOT_PART" >/dev/null 2>&1 || true
-    log "rootfs ${p}: $(find "$DUMP/$(basename "$p")" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
+    debugfs -R "rdump ${p} ${DUMP}" "$ROOT_PART" > "$WORK/dbg.log" 2>&1 || true
+    n="$(find "$DUMP/$(basename "$p")" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    log "rootfs ${p}: ${n} file(s)"
+    (( n > 0 )) || warn "  debugfs: $(head -2 "$WORK/dbg.log" | tr '\n' ' ')"
 done
 
 # --- find the pieces --------------------------------------------------------

@@ -21,8 +21,18 @@ assert_staged() { # $1 = build dir
     [[ -s "$BOOT/dtb-regular.img" ]] && ok "regular DTB staged" || bad "regular DTB missing"
     [[ -s "$BOOT/dtb-rev6.img" ]] && ok "rev6 DTB staged" || bad "rev6 DTB missing"
     [[ -s "$BOOT/dtb.img" ]] && ok "dtb.img present" || bad "dtb.img missing"
-    [[ -e "$OVL/lib/modules/7.1.2/kernel/drivers/net/test.ko" ]] && ok "modules staged" || bad "modules missing"
-    [[ -e "$OVL/lib/firmware/brcm/test.bin" ]] && ok "firmware staged" || bad "firmware missing"
+    if [[ -e "$OVL/lib/modules/7.1.2/kernel/drivers/net/test.ko" ]]; then
+        ok "modules staged"
+    else
+        bad "modules missing"
+        find "$OVL" -maxdepth 6 2>/dev/null | head -20 | sed 's/^/    ovl: /'
+    fi
+    if [[ -e "$OVL/lib/firmware/brcm/test.bin" ]]; then
+        ok "firmware staged"
+    else
+        bad "firmware missing"
+        find "$OVL" -maxdepth 6 2>/dev/null | head -20 | sed 's/^/    ovl: /'
+    fi
 }
 
 HAVE=1

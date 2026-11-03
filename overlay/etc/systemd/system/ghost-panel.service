@@ -1,0 +1,18 @@
+[Unit]
+Description=Use the device tree that matches the screen panel (regular or rev6)
+RequiresMountsFor=/boot
+# Before the desktop session, so nothing holds hardware yet when it restarts.
+# After the first-boot jobs and the Wi-Fi import (which writes to the same FAT partition).
+After=ghost-expand-fs.service expand-rootfs.service ghost-wifi-import.service
+Before=lightdm.service getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ghost-panel
+RemainAfterExit=yes
+# After a switch it asks for a restart; shutdown stops it with SIGTERM. Not a failure.
+SuccessExitStatus=SIGTERM
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target

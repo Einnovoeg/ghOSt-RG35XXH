@@ -10,6 +10,8 @@ setenv bootargs "root=/dev/mmcblk0p2 rw rootwait \
   systemd.log_target=kmsg systemd.log_level=debug \
   systemd.journald.forward_to_console=1 printk.devkmsg=on"
 
+# dtb.img is picked at boot by ghost-panel (regular or rev6 screen panel);
+# the per-panel copies are dtb-regular.img / dtb-rev6.img on this partition.
 fatload mmc 0:1 0x44000000 Image
-fatload mmc 0:1 0x4FA00000 sun50i-h700-anbernic-rg35xx-h.dtb
+fatload mmc 0:1 0x4FA00000 dtb.img
 booti 0x44000000 - 0x4FA00000

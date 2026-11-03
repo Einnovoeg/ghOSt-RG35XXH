@@ -454,6 +454,8 @@ EOF
     systemctl enable wifi-watchdog.service 2>/dev/null || true
     systemctl enable expand-rootfs.service 2>/dev/null || true
     systemctl enable usb-mtp.service 2>/dev/null || true
+    systemctl enable ghost-panel.service 2>/dev/null || true
+    systemctl enable ghost-wifi-import.service 2>/dev/null || true
 else
     systemctl enable ghost-gui
 fi
@@ -836,6 +838,9 @@ UNIT
 systemctl enable ghost-battery.service
 systemctl enable ghost-memkeeper.service
 systemctl enable ghost-expand-fs.service
+# Screen-panel DTB selection and pre-boot Wi-Fi import (boot partition files)
+systemctl enable ghost-panel.service 2>/dev/null || true
+systemctl enable ghost-wifi-import.service 2>/dev/null || true
 
 # Apply default theme (catppuccin)
 if ! sudo -u "$GHOST_USER" python3 /opt/ghost/themes/ghost-theme.py catppuccin; then

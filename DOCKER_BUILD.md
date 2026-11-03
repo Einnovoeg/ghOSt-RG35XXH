@@ -134,11 +134,12 @@ docker run --privileged \
 
 ## Flashing the Image
 
-When the build finishes, `./output/ghOSt-RG35XXH-1.0.0.img.gz` appears.
+When the build finishes, `./output/ghOSt-RG35XXH-<version>-<sha>.img.xz` appears next to
+`SHA256SUMS` (and a `.bmap` when `bmaptool` is installed). The image is MBR-partitioned.
 
 ### Windows — Balena Etcher
 1. Open Balena Etcher
-2. Click **Flash from file** → select the `.img.gz` file
+2. Click **Flash from file** → select the `.img.xz` file (Etcher unpacks it itself)
 3. Select your SD card
 4. Click **Flash**
 
@@ -152,7 +153,8 @@ diskutil list
 
 # Flash (replace diskN with your SD card, e.g. disk4)
 diskutil unmountDisk /dev/diskN
-gunzip -c output/ghOSt-RG35XXH-1.0.0.img.gz | \
+brew install xz   # once, if xz is missing
+xz -dc output/ghOSt-RG35XXH-*.img.xz | \
   sudo dd of=/dev/rdiskN bs=4m status=progress
 diskutil eject /dev/diskN
 ```

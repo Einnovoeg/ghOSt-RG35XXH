@@ -1,0 +1,59 @@
+#!/bin/bash
+# Port of rg35xxh-wifi-import from junsulee119/handtop (MIT License,
+# Copyright (c) 2026 Handtop contributors). See LICENSES/MIT-handtop.txt.
+# ghOSt changes: /boot path, NetworkManager profile naming, failure handling.
+# Import Wi-Fi settings from wifi.txt on the boot partition into NetworkManager,
+# then blank the password in the file. Runs at boot (ghost-wifi-import.service).
+set -uo pipefail
+WIFI_FILE="${WIFI_FILE:-/boot/wifi.txt}"
+NMCLI="${NMCLI:-nmcli}"
+IW="${IW:-iw}"
+log() { echo "ghost-wifi-import: $*"; }
+
+[ -f "$WIFI_FILE" ] || { log "no $WIFI_FILE"; exit 0; }
+
+# The file is edited on Windows/macOS: strip BOM and CR.
+content="$(sed -e '1s/^\xEF\xBB\xBF//' -e 's/\r$//' "$WIFI_FILE")"
+get() { printf '%s\n' "$content" | sed -n "s/^[[:space:]]*$1[[:space:]]*=//p" | head -n1 \
+        | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | sed -E 's/^"(.*)"$/\1/'; }
+SSID="$(get SSID)"; PASSWORD="$(get PASSWORD)"; COUNTRY="$(get COUNTRY)"
+
+if [ -n "$COUNTRY" ] && command -v "$IW" >/dev/null; then
+  "$IW" reg set "$COUNTRY" 2>/dev/null && log "regulatory domain: $COUNTRY"
+fi
+[ -n "$SSID" ] || { log "SSID empty, nothing to import"; exit 0; }
+# Already imported and the file has no new password to apply.
+[ -z "$PASSWORD" ] && printf '%s\n' "$content" | grep -q '^# imported' \
+  && { log "'$SSID' already imported"; exit 0; }
+
+# Add under a temporary name first; an existing profile for this SSID is deleted only
+# once that worked and the new one then takes its name. A password NetworkManager
+# refuses (WPA needs 8-63 characters) leaves the old, working profile alone, and the
+# password stays in the file for another try.
+con="wifi-$SSID"
+new="$con (importing)"
+have() { "$NMCLI" -t -f NAME connection show | grep -Fxq "$1"; }
+have "$new" && "$NMCLI" connection delete id "$new" >/dev/null   # left by an interrupted run
+if [ -n "$PASSWORD" ]; then
+  "$NMCLI" connection add type wifi con-name "$new" ssid "$SSID" \
+    wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$PASSWORD" connection.autoconnect yes >/dev/null
+else
+  "$NMCLI" connection add type wifi con-name "$new" ssid "$SSID" connection.autoconnect yes >/dev/null
+fi || { log "nmcli refused the settings for '$SSID' (password must be 8-63 characters); existing connection kept"; exit 1; }
+if have "$con"; then
+  "$NMCLI" connection delete id "$con" >/dev/null || log "could not delete the old connection '$con'"
+fi
+"$NMCLI" connection modify id "$new" connection.id "$con" >/dev/null \
+  || { log "could not rename '$new' to '$con'"; con="$new"; }
+log "added connection '$con'"
+
+# Blank the password in place (the file stays, so the user can see what was imported).
+tmp="$WIFI_FILE.tmp"
+printf '%s\n' "$content" | sed -e "s/^[[:space:]]*PASSWORD[[:space:]]*=.*/PASSWORD=/" \
+  -e '/^# imported /d' > "$tmp"
+printf '# imported %s - password removed from this file; it is stored on the device\n' \
+  "$(date '+%Y-%m-%d %H:%M')" >> "$tmp"
+mv -f "$tmp" "$WIFI_FILE" && sync
+"$NMCLI" connection up "$con" >/dev/null 2>&1 && log "connected to '$SSID'" \
+  || log "'$SSID' not reachable now; will autoconnect"
+exit 0

@@ -1,9 +1,9 @@
 #!/bin/zsh
 # =============================================================================
 # ghOSt macOS Flash Script
-# Writes a ghOSt .img or .img.gz file to removable media and repairs GPT.
-# Use this instead of plain dd on macOS so the written card gets a recovered
-# backup GPT table after flashing.
+# Writes a ghOSt .img / .img.xz / .img.gz to removable media.
+# The shipped image is MBR (no GPT), so GPT recovery only runs when the media
+# actually has a GPT header; .xz is decompressed on the fly (brew install xz).
 # =============================================================================
 set -euo pipefail
 
@@ -24,8 +24,8 @@ DISK=""
 RDISK=""
 
 show_images() {
-    IMAGES=(*.img(.N) *.img.gz(.N))
-    (( ${#IMAGES[@]} > 0 )) || log_error "No .img or .img.gz files found in $(pwd)"
+    IMAGES=(*.img(.N) *.img.xz(.N) *.img.gz(.N))
+    (( ${#IMAGES[@]} > 0 )) || log_error "No .img, .img.xz or .img.gz files found in $(pwd)"
 
     log_info "Available images:"
     local idx=1
@@ -45,7 +45,8 @@ select_image() {
 
     local choice
     read "choice?Select image number (1-${#IMAGES[@]}): "
-    [[ "$choice" =~ '^[0-9]+$' ]] || log_error "Invalid selection"
+    # zsh treats a quoted =~ pattern literally, so this must stay unquoted.
+    [[ "$choice" =~ ^[0-9]+$ ]] || log_error "Invalid selection"
     (( choice >= 1 && choice <= ${#IMAGES[@]} )) || log_error "Selection out of range"
     SELECTED_IMAGE="${IMAGES[$choice]}"
 }
@@ -61,7 +62,7 @@ select_device() {
     local diskname
     while true; do
         read "diskname?Enter target disk (for example disk2): "
-        [[ "$diskname" =~ '^disk[0-9]+$' ]] || {
+        [[ "$diskname" =~ ^disk[0-9]+$ ]] || {
             log_warn "Invalid disk name"
             continue
         }
@@ -92,16 +93,32 @@ flash_image() {
     log_info "Writing ${SELECTED_IMAGE} to ${RDISK}"
     log_info "macOS dd does not always show progress; press Ctrl+T for a status update if needed."
 
-    if [[ "$SELECTED_IMAGE" == *.gz ]]; then
-        gzip -dc "$SELECTED_IMAGE" | $ESUDO dd of="$RDISK" bs=4m conv=sync
-    else
-        $ESUDO dd if="$SELECTED_IMAGE" of="$RDISK" bs=4m conv=sync
-    fi
+    case "$SELECTED_IMAGE" in
+        *.xz)
+            command -v xz >/dev/null 2>&1 || \
+                log_error "xz not found — install it with: brew install xz"
+            xz -dc "$SELECTED_IMAGE" | $ESUDO dd of="$RDISK" bs=4m conv=sync
+            ;;
+        *.gz)
+            gzip -dc "$SELECTED_IMAGE" | $ESUDO dd of="$RDISK" bs=4m conv=sync
+            ;;
+        *)
+            $ESUDO dd if="$SELECTED_IMAGE" of="$RDISK" bs=4m conv=sync
+            ;;
+    esac
     sync
     log_success "Image write complete"
 }
 
+has_gpt() {
+    [[ "$(LC_ALL=C dd if="$DISK" bs=512 skip=1 count=1 2>/dev/null | head -c 8)" == "EFI PART" ]]
+}
+
 repair_gpt() {
+    if ! has_gpt; then
+        log_info "Image uses MBR partitions — no GPT table to recover"
+        return 0
+    fi
     log_info "Recovering GPT backup table on ${DISK}"
     $ESUDO gpt recover "$DISK"
     sync

@@ -32,15 +32,25 @@ EOF
 }
 
 check_privileged() {
-    # Loop device access requires --privileged
-    if ! losetup -f &>/dev/null; then
-        error "Container needs --privileged flag for loop device access.
-        
+    # Image assembly no longer uses loop devices, but the chroot stage really mounts
+    # /dev, /proc, /sys and /run, which needs --privileged inside Docker.
+    local probe
+    probe="$(mktemp -d)"
+    if ! mount -t tmpfs tmpfs "$probe" 2>/dev/null; then
+        rmdir "$probe" 2>/dev/null || true
+        error "Container needs the --privileged flag (mounts for the chroot stage).
+
   Run with:
     docker run --privileged -v \"\$(pwd)/output:/opt/ghost-build/output\" ghost-rg35xxh-builder:latest
 
   Or use docker compose:
     docker compose up --build"
+    fi
+    umount "$probe" && rmdir "$probe"
+
+    # Only the experimental BOOT_FLOW=legacy path needs loop devices.
+    if ! losetup -f &>/dev/null; then
+        warn "Loop devices unavailable — fine for the default rocknix boot flow"
     fi
 }
 
@@ -74,16 +84,17 @@ mode_build() {
     bash build.sh
 
     # Copy output to volume mount
-    if ls /opt/ghost-build/output/*.img.gz &>/dev/null; then
+    if ls /opt/ghost-build/output/*.img.xz &>/dev/null; then
         section "Build Complete"
         log "Image ready:"
-        ls -lh /opt/ghost-build/output/*.img.gz
+        ls -lh /opt/ghost-build/output/*.img.xz /opt/ghost-build/output/SHA256SUMS 2>/dev/null
         echo ""
-        log "Flash with Balena Etcher (Windows/Mac/Linux)"
+        log "Flash with Balena Etcher (Windows/Mac/Linux) — it unpacks .xz directly"
         log "Or on Linux/Mac terminal:"
-        log "  gunzip -c output/ghOSt-*.img.gz | dd of=/dev/sdX bs=4M status=progress"
+        log "  xz -dc output/ghOSt-*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress"
+        log "  (or: sudo bmaptool copy output/ghOSt-*.img.xz /dev/sdX)"
     else
-        error "Build completed but no .img.gz found in output directory"
+        error "Build completed but no .img.xz found in output directory"
     fi
 }
 
@@ -104,7 +115,8 @@ mode_check() {
     log "Checking build tools..."
     local ok=true
     for tool in aarch64-linux-gnu-gcc debootstrap qemu-aarch64-static \
-                parted kpartx losetup mkfs.ext4 mkfs.vfat git wget curl; do
+                mcopy mkfs.vfat mkfs.ext4 sfdisk mkimage e2fsck \
+                rsync git wget curl xz; do
         if command -v "$tool" &>/dev/null; then
             echo -e "  ${GREEN}✓${NC} $tool"
         else
@@ -120,12 +132,21 @@ mode_check() {
         echo -e "  ${YELLOW}⚠${NC} ARM64 binfmt not registered (will register at build time)"
     fi
 
-    log "Checking privileged mode (loop devices)..."
-    if losetup -f &>/dev/null; then
-        echo -e "  ${GREEN}✓${NC} Loop devices accessible (--privileged OK)"
+    log "Checking privileged mode (mounts for the chroot stage)..."
+    local probe
+    probe="$(mktemp -d)"
+    if mount -t tmpfs tmpfs "$probe" 2>/dev/null; then
+        umount "$probe" && rmdir "$probe"
+        echo -e "  ${GREEN}✓${NC} Mounts allowed (--privileged OK)"
     else
-        echo -e "  ${RED}✗${NC} Loop devices NOT accessible — need --privileged flag"
+        rmdir "$probe" 2>/dev/null || true
+        echo -e "  ${RED}✗${NC} Mounts NOT allowed — need --privileged flag"
         ok=false
+    fi
+    if losetup -f &>/dev/null; then
+        echo -e "  ${GREEN}✓${NC} Loop devices accessible (only needed for BOOT_FLOW=legacy)"
+    else
+        echo -e "  ${YELLOW}⚠${NC} No loop devices — default rocknix image assembly does not need them"
     fi
 
     log "Checking disk space..."
@@ -160,7 +181,7 @@ case "${1:-build}" in
         echo "Usage: docker run [options] ghost-rg35xxh-builder:latest [command]"
         echo ""
         echo "Commands:"
-        echo "  build   Full build (default) — outputs .img.gz to ./output/"
+        echo "  build   Full build (default) — outputs .img.xz + SHA256SUMS to ./output/"
         echo "  shell   Interactive shell inside build environment"
         echo "  check   Verify build environment is ready"
         echo "  kernel  Build kernel only (for testing)"

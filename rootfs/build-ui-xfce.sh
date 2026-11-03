@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Derived from rg35xxh-cyberdeck (GPL-2.0, Copyright (C) 2026 hataketsu (Arne Muco)
+# and contributors; https://github.com/hataketsu/rg35xxh-cyberdeck).
+# This file is distributed under GPL-2.0, not MIT: see LICENSES/GPL-2.0.txt.
 # =============================================================================
 # ghOSt UI Stage — XFCE + LightDM + handheld enablement
 # Ported from rg35xxh-cyberdeck rootfs/stages/{10,20,30,50} + overlay.

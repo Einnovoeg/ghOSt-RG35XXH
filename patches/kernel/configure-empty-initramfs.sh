@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Derived from rg35xxh-cyberdeck (GPL-2.0, Copyright (C) 2026 hataketsu (Arne Muco)
+# and contributors; https://github.com/hataketsu/rg35xxh-cyberdeck).
+# This file is distributed under GPL-2.0, not MIT: see LICENSES/GPL-2.0.txt.
 # Run inside the rocknix-builder Docker container as user `docker`.
 #
 # CRITICAL: ROCKNIX's `scripts/build linux` wrapper invokes `usr/gen_initramfs.sh`

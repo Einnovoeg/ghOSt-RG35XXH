@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
+# Image-assembly approach ported from junsulee119/handtop build/10-image.sh
+# (MIT License, Copyright (c) 2026 Handtop contributors). See LICENSES/MIT-handtop.txt.
+# ghOSt changes: PARTUUID boot.scr rebuild, dual-panel DTBs, host-identity
+# stripping, rootfs-sized partitions, .xz + SHA256SUMS output.
 # =============================================================================
-# ghOSt Image Packer (ROCKNIX proven layout)
+# ghOSt Image Packer (ROCKNIX proven layout, no loop devices)
 # Compose final SD image: MBR, u-boot SPL @ 8KB, FAT boot p1, ext4 rootfs p2.
-# Ported from rg35xxh-cyberdeck image/pack-image.sh, adapted to ghOSt paths:
-#   $BUILD_DIR/rocknix  (kernel build tree)
-#   $ROOTFS_DIR         (Debian Trixie + XFCE + ghOSt tools)
-#   $OUTPUT_DIR         (dist artifacts)
 #
 # Why MBR and not GPT: H700 ROM + ROCKNIX u-boot SPL overlap GPT header at
 # LBA1-33 (8KB offset). Stock/ROCKNIX images use MBR. GPT was a boot failure.
 # Why FAT /boot: u-boot fatload mmc 0:1 Image + DTB + boot.scr (see boot.cmd).
 # Why no separate swap partition: MBR + swap-at-end complicated first-boot
 # expand; ghOSt keeps zram (prio 100) + optional swapfile inside rootfs.
+#
+# Why no losetup/kpartx/mount (ported from junsulee119/handtop build/10-image.sh):
+# inside Docker Desktop on macOS the loop -> device-mapper path fails with
+# "mkfs.ext4: Operation not permitted while trying to determine filesystem
+# size". Partitions are therefore built as plain files (mkfs.vfat + mtools,
+# mkfs.ext4 -d) and written into the image at their offsets with dd. That path
+# needs no /dev nodes, no mounts and no privileged loop support.
 # =============================================================================
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,111 +31,189 @@ WORK="${RG_WORK:-$BUILD_DIR}"
 DIST="${RG_DIST:-$OUTPUT_DIR}"
 ROOTFS="${ROOTFS_DIR}"
 
-[ "$(id -u)" = 0 ] || { echo "must be root"; exit 1; }
-[[ -d "$ROOTFS/etc" ]] || { echo "rootfs not found at $ROOTFS"; ls -la "$WORK" 2>/dev/null || true; exit 1; }
+is_enabled() {
+    case "${1:-false}" in
+        1|true|TRUE|yes|YES|on|ON) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
-mkdir -p "$DIST"
+log()  { echo -e "\033[0;32m[pack]\033[0m $*"; }
+warn() { echo -e "\033[1;33m[pack]\033[0m $*"; }
+die()  { echo -e "\033[0;31m[pack]\033[0m $*" >&2; exit 1; }
+
+[ "$(id -u)" = 0 ] || die "must be root (mkfs.ext4 -d needs to set ownership)"
+[[ -n "$ROOTFS" ]] || die "ROOTFS_DIR is empty"
+[[ -f "$ROOTFS/etc/debian_version" ]] || die "not a Debian rootfs: $ROOTFS"
+[[ -d "$DIST" ]] || mkdir -p "$DIST"
+
+# Build-tree artifact locations (overridable for tests/CI without a kernel build).
+ROCKNIX_BUILD="$WORK/rocknix/build.ROCKNIX-${DEVICE}.${ARCH}"
+KERNEL_BOOT="$KERNEL_BUILD_DIR/boot"     # staged by kernel/build-rocknix.sh
+
+# Assets staged by the kernel stage win. ROCKNIX keeps device trees in its boot
+# payload and names U-Boot per RAM type, so guessing paths inside the kernel
+# build tree is what made earlier builds fail here.
+UBOOT_BIN="${GHOST_UBOOT_BIN:-}"
+if [[ -z "$UBOOT_BIN" && -f "$KERNEL_BOOT/u-boot-sunxi-with-spl.bin" ]]; then
+    UBOOT_BIN="$KERNEL_BOOT/u-boot-sunxi-with-spl.bin"
+fi
+if [[ -z "$UBOOT_BIN" ]]; then
+    UBOOT_BIN="$(ls -1 "$ROCKNIX_BUILD"/install_pkg/u-boot-*/usr/share/bootloader/*"${UBOOT_DDR:-DDR4}"*u-boot-sunxi-with-spl.bin 2>/dev/null | head -1)"
+fi
+if [[ -z "$UBOOT_BIN" ]]; then
+    UBOOT_BIN="$(ls -1 "$ROCKNIX_BUILD"/install_pkg/u-boot-*/usr/share/bootloader/*u-boot-sunxi-with-spl.bin 2>/dev/null | head -1)"
+fi
+
+KERNEL_IMAGE="${GHOST_KERNEL_IMAGE:-}"
+if [[ -z "$KERNEL_IMAGE" && -f "$KERNEL_BOOT/Image" ]]; then
+    KERNEL_IMAGE="$KERNEL_BOOT/Image"
+fi
+if [[ -z "$KERNEL_IMAGE" ]]; then
+    KERNEL_IMAGE="$ROCKNIX_BUILD/build/${KERNEL_NAME}/arch/arm64/boot/Image"
+fi
+
+DTB_FILE="${GHOST_DTB_FILE:-}"
+if [[ -z "$DTB_FILE" && -f "$KERNEL_BOOT/dtb-regular.img" ]]; then
+    DTB_FILE="$KERNEL_BOOT/dtb-regular.img"
+fi
+if [[ -z "$DTB_FILE" ]]; then
+    DTB_FILE="$ROCKNIX_BUILD/build/${KERNEL_NAME}/arch/arm64/boot/dts/allwinner/${DTB_NAME}"
+fi
+
+DTB_REV6_FILE="${GHOST_DTB_REV6_FILE:-}"
+if [[ -z "$DTB_REV6_FILE" && -f "$KERNEL_BOOT/dtb-rev6.img" ]]; then
+    DTB_REV6_FILE="$KERNEL_BOOT/dtb-rev6.img"
+fi
+if [[ -z "$DTB_REV6_FILE" ]]; then
+    DTB_REV6_FILE="$ROCKNIX_BUILD/build/${KERNEL_NAME}/arch/arm64/boot/dts/allwinner/${DTB_REV6_NAME}"
+fi
+BOOT_CMD="${GHOST_BOOT_CMD:-$SCRIPT_DIR/patches/uboot/boot.cmd}"
+
+[[ -n "${UBOOT_BIN:-}" && -f "$UBOOT_BIN" ]] || \
+    die "u-boot SPL not found (run kernel/build-rocknix.sh, or set GHOST_UBOOT_BIN). Looked for $UBOOT_DDR then any *u-boot-sunxi-with-spl.bin under $ROCKNIX_BUILD/install_pkg"
+[[ -f "$KERNEL_IMAGE" ]] || die "kernel Image not found: $KERNEL_IMAGE"
+[[ -f "$DTB_FILE" ]] || die "DTB not found: $DTB_FILE"
+[[ -f "$BOOT_CMD" ]] || die "boot.cmd not found: $BOOT_CMD"
+for tool in mkfs.vfat mcopy mkfs.ext4 e2fsck sfdisk dd truncate; do
+    command -v "$tool" >/dev/null 2>&1 || die "missing host tool: $tool"
+done
+
+# --- host-side identity must not ship inside the image ------------------------
+: > "$ROOTFS/etc/machine-id"                       # systemd generates one on boot
+rm -f "$ROOTFS/var/lib/dbus/machine-id"
+rm -f "$ROOTFS"/etc/ssh/ssh_host_*                 # regenerated by firstboot
+rm -f "$ROOTFS/usr/bin/qemu-aarch64-static"        # build-only binfmt helper
+rm -rf "$ROOTFS"/var/cache/apt/archives/*.deb "$ROOTFS"/var/lib/apt/lists/*
+rm -f "$ROOTFS"/root/.bash_history
+
+# /boot is the FAT partition at runtime: never ship a second copy on ext4.
+if mountpoint -q "$ROOTFS/boot" 2>/dev/null; then
+    die "$ROOTFS/boot is still mounted — unmount it before packing"
+fi
+mkdir -p "$ROOTFS/boot"
+find "$ROOTFS/boot" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+# --- sizes -------------------------------------------------------------------
+BOOT_START_MIB="$UBOOT_GAP_MIB"
+ROOT_START_MIB=$(( UBOOT_GAP_MIB + BOOT_PART_MIB ))
+
+ROOT_USED_MIB=$(du -smx "$ROOTFS" | cut -f1)
+ROOT_SIZE_MIB=$(( (ROOT_USED_MIB * 125 / 100 + 384 + 63) / 64 * 64 ))  # +25% +384MiB
+if [[ "${IMAGE_SIZE_GB:-0}" -gt 0 ]]; then
+    # IMAGE_SIZE_GB is a floor, never a cap: a fat toolset grows the partition.
+    FLOOR_MIB=$(( IMAGE_SIZE_GB * 1024 - ROOT_START_MIB ))
+    if (( FLOOR_MIB > ROOT_SIZE_MIB )); then
+        ROOT_SIZE_MIB=$(( FLOOR_MIB / 64 * 64 ))
+    fi
+fi
+(( ROOT_SIZE_MIB > ROOT_USED_MIB + 256 )) || die "root partition too small: ${ROOT_SIZE_MIB}MiB for ${ROOT_USED_MIB}MiB of data"
+TOTAL_MIB=$(( ROOT_START_MIB + ROOT_SIZE_MIB + 1 ))
+
 GIT_SHA="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || date +%Y%m%d)"
 IMG="$DIST/ghOSt-RG35XXH-${GHOST_VERSION:-1.0.0}-${GIT_SHA}.img"
-SIZE_BYTES=$(( IMAGE_SIZE_GB * 1024 * 1024 * 1024 ))
+log "rootfs ${ROOT_USED_MIB}MiB -> root partition ${ROOT_SIZE_MIB}MiB, image ${TOTAL_MIB}MiB"
 
-echo "[pack] creating $IMG (${IMAGE_SIZE_GB} GB)"
-rm -f "$IMG"
-truncate -s "$SIZE_BYTES" "$IMG"
+PARTS="$(mktemp -d)"
+cleanup() { rm -rf "$PARTS"; }
+trap cleanup EXIT
 
-# MBR: u-boot in gap 8KB..16MB, p1 FAT 256MB, p2 ext4 rest
-parted -s "$IMG" mklabel msdos
-parted -s "$IMG" mkpart primary fat32 16MiB 272MiB
-parted -s "$IMG" mkpart primary ext4  272MiB 100%
-parted -s "$IMG" set 1 boot on
+# --- boot partition (FAT32) --------------------------------------------------
+BOOTDIR="$PARTS/boot"
+mkdir -p "$BOOTDIR/logs"
+cp "$KERNEL_IMAGE" "$BOOTDIR/Image"
 
-LOOP=$(losetup --find --show "$IMG")
-KPMAP=$(basename "$LOOP")
-# shellcheck disable=SC2064
-trap 'kpartx -d "$LOOP" 2>/dev/null || true; losetup -d "$LOOP" 2>/dev/null || true' EXIT
-kpartx -a -s "$LOOP"
-udevadm settle 2>/dev/null || true
-P1=/dev/mapper/${KPMAP}p1
-P2=/dev/mapper/${KPMAP}p2
-for i in 1 2 3 4 5; do
-  [ -b "$P2" ] && break
-  sleep 1
-  udevadm settle 2>/dev/null || true
-done
-[ -b "$P2" ] || { echo "kpartx failed to create $P2"; ls -la /dev/mapper/; exit 1; }
-
-echo "[pack] formatting (BOOT vfat, rootfs ext4)..."
-mkfs.vfat -F 32 -n BOOT   "$P1"
-mkfs.ext4 -F -L rootfs "$P2"
-
-# Install u-boot SPL @ 8KB
-UBOOT_GLOB="$WORK/rocknix/build.ROCKNIX-${DEVICE}.${ARCH}/install_pkg/u-boot-"*"/usr/share/bootloader/u-boot-sunxi-with-spl.bin"
-UBOOT=$(ls -1 $UBOOT_GLOB 2>/dev/null | head -1 || true)
-[[ -n "${UBOOT:-}" && -f "$UBOOT" ]] || { echo "[pack] u-boot SPL not found: $UBOOT_GLOB"; ls "$WORK/rocknix/build.ROCKNIX-"* 2>/dev/null || true; exit 1; }
-echo "[pack] u-boot: $UBOOT"
-dd if="$UBOOT" of="$LOOP" bs=1024 seek=8 conv=notrunc status=none
-
-# Mount and populate
-MNT=$(mktemp -d)
-mount "$P2" "$MNT"
-mkdir -p "$MNT/boot"
-mount "$P1" "$MNT/boot"
-
-# Kernel + DTB (patched) + boot.scr/boot.cmd
-KSRC="$WORK/rocknix/build.ROCKNIX-${DEVICE}.${ARCH}/build/${KERNEL_NAME}"
-[[ -f "$KSRC/arch/arm64/boot/Image" ]] || { echo "[pack] kernel Image missing: $KSRC"; exit 1; }
-cp "$KSRC/arch/arm64/boot/Image" "$MNT/boot/"
-cp "$KSRC/arch/arm64/boot/dts/allwinner/${DTB_NAME}" "$MNT/boot/"
-cp "$SCRIPT_DIR/patches/uboot/boot.scr" "$MNT/boot/"
-cp "$SCRIPT_DIR/patches/uboot/boot.cmd" "$MNT/boot/"
-
-# Rootfs (exclude /boot which is the FAT mount)
-rsync -aHAX "$ROOTFS/" "$MNT/" --exclude=/boot/\*
-
-# Modules from ROCKNIX install_pkg + KNULLI firmware if staged
-MODS="$WORK/rocknix/build.ROCKNIX-${DEVICE}.${ARCH}/install_pkg/${KERNEL_NAME}/usr/lib/kernel-overlays/base/lib/modules"
-if [[ -d "$MODS" ]]; then
-  echo "[pack] installing kernel modules..."
-  rsync -aHAX "$MODS/" "$MNT/lib/modules/"
-fi
-if [[ -d "$BUILD_DIR/kernel/rootfs-overlay/lib/modules" ]]; then
-  echo "[pack] merging KNULLI firmware/modules overlay (WiFi fw)..."
-  rsync -aHAX "$BUILD_DIR/kernel/rootfs-overlay/" "$MNT/" 2>/dev/null || true
-fi
-
-# Joypad module (built separately by scripts/build-joypad-module.sh)
-JOYMOD="$WORK/rocknix-joypad-build/rocknix-singleadc-joypad.ko"
-if [[ -f "$JOYMOD" ]]; then
-  KVER=$(ls "$MNT/lib/modules/" | head -1)
-  echo "[pack] installing joypad module -> $KVER/extra"
-  install -d "$MNT/lib/modules/$KVER/extra"
-  cp "$JOYMOD" "$MNT/lib/modules/$KVER/extra/"
-  chroot "$MNT" depmod -a "$KVER" 2>/dev/null || true
-  echo rocknix-singleadc-joypad > "$MNT/etc/modules-load.d/rocknix-joypad.conf"
+# Retail units carry one of two screen panels. Ship both device trees and let
+# ghost-panel pick the matching one at boot; dtb.img is what boot.scr loads.
+cp "$DTB_FILE" "$BOOTDIR/dtb-regular.img"
+cp "$DTB_FILE" "$BOOTDIR/dtb.img"
+if [[ -f "$DTB_REV6_FILE" ]]; then
+    cp "$DTB_REV6_FILE" "$BOOTDIR/dtb-rev6.img"
 else
-  echo "[pack] joypad .ko not found (run scripts/build-joypad-module.sh) — joy2mouse will retry at boot"
+    warn "rev6 DTB not found ($DTB_REV6_FILE) — only regular-panel units will work"
 fi
 
-# Ensure fstab matches MBR LABEL layout (UI stage already writes this, reinforce)
-cat > "$MNT/etc/fstab" <<'EOF'
-LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
-LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
-proc           /proc    proc   defaults                             0 0
-tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0
-EOF
+# Files the owner may edit from a PC; CRLF so Windows Notepad shows them correctly.
+for f in wifi.txt panel.txt README.txt; do
+    sed 's/$/\r/' "$SCRIPT_DIR/image/bootfiles/$f" > "$BOOTDIR/$f"
+done
 
-sync
-umount "$MNT/boot"
-umount "$MNT"
-rmdir "$MNT"
-kpartx -d "$LOOP" 2>/dev/null || true
-losetup -d "$LOOP"; trap - EXIT
+PARTUUID_ROOT="$(printf '%08x' "$((DISK_ID))")-02"
+# Point the kernel at the root partition by PARTUUID: the unit has two SD slots
+# and mmcblk numbering can change, so root=/dev/mmcblk0p2 is not reliable.
+sed "s|root=/dev/mmcblk0p2|root=PARTUUID=${PARTUUID_ROOT}|" \
+    "$BOOT_CMD" > "$BOOTDIR/boot.cmd"
+# boot.scr must be compiled here: the committed blob predates the dtb.img layout,
+# and shipping it would make U-Boot look for a DTB that no longer exists.
+command -v mkimage >/dev/null 2>&1 || \
+    die "mkimage (u-boot-tools) is required to build boot.scr for the dtb.img layout"
+mkimage -A arm64 -O linux -T script -C none -n "ghOSt RG35XXH" \
+    -d "$BOOTDIR/boot.cmd" "$BOOTDIR/boot.scr" >/dev/null
+log "boot.scr regenerated with root=PARTUUID=${PARTUUID_ROOT}"
 
-echo "[pack] creating bmap"
-bmaptool create -o "$IMG.bmap" "$IMG" 2>/dev/null || echo "[pack] bmaptool missing, skipping bmap"
+log "building FAT boot partition (${BOOT_PART_MIB}MiB)"
+mkfs.vfat -F 32 -n "$BOOT_LABEL" -C "$PARTS/boot.vfat" $(( BOOT_PART_MIB * 1024 )) >/dev/null
+MTOOLS_SKIP_CHECK=1 mcopy -s -i "$PARTS/boot.vfat" "$BOOTDIR"/* ::/
 
-echo "[pack] compressing -> ${IMG}.xz"
-xz -T 0 -6 -k "$IMG"
-( cd "$DIST" && sha256sum "$(basename "$IMG").xz" "$(basename "$IMG").bmap" > SHA256SUMS 2>/dev/null || sha256sum "$(basename "$IMG").xz" > SHA256SUMS )
-ls -lh "$IMG"*
-echo "[pack] done. Flash with: sudo bmaptool copy ${IMG}.xz /dev/sdX  (or xz -d + dd)"
+# --- root partition (ext4, populated directly from the rootfs directory) -----
+log "building ext4 root partition (${ROOT_SIZE_MIB}MiB, journalled, 1% reserve)"
+mkfs.ext4 -q -F -L "$ROOT_LABEL" -m 1 \
+    -E root_owner=0:0,lazy_itable_init=0 \
+    -d "$ROOTFS" "$PARTS/root.ext4" "${ROOT_SIZE_MIB}M"
+e2fsck -fn "$PARTS/root.ext4" >/dev/null || die "e2fsck found errors in root.ext4"
+
+# --- assemble ----------------------------------------------------------------
+log "assembling MBR image: u-boot @8KiB, p1 @${BOOT_START_MIB}MiB, p2 @${ROOT_START_MIB}MiB"
+rm -f "$IMG"
+truncate -s "${TOTAL_MIB}M" "$IMG"
+sfdisk -q "$IMG" <<SFDISK
+label: dos
+label-id: ${DISK_ID}
+start=$(( BOOT_START_MIB * 2048 )), size=$(( BOOT_PART_MIB * 2048 )), type=c, bootable
+start=$(( ROOT_START_MIB * 2048 )), size=$(( ROOT_SIZE_MIB * 2048 )), type=83
+SFDISK
+
+dd if="$UBOOT_BIN" of="$IMG" bs=1024 seek=8 conv=notrunc status=none
+dd if="$PARTS/boot.vfat" of="$IMG" bs=1M seek="$BOOT_START_MIB" conv=notrunc,sparse status=none
+dd if="$PARTS/root.ext4" of="$IMG" bs=1M seek="$ROOT_START_MIB" conv=notrunc,sparse status=none
+
+# --- verify before shipping --------------------------------------------------
+sfdisk -l "$IMG" 2>/dev/null | tail -4
+ROOT_OFF=$(( ROOT_START_MIB * 1024 * 1024 ))
+if ! dd if="$IMG" bs=1M skip="$ROOT_START_MIB" count=4 status=none | \
+     grep -qa "$ROOT_LABEL"; then
+    warn "could not read ext4 label back from offset $ROOT_OFF (non-fatal)"
+fi
+
+log "creating bmap"
+bmaptool create -o "$IMG.bmap" "$IMG" 2>/dev/null || { warn "bmaptool missing, skipping bmap"; rm -f "$IMG.bmap"; }
+
+log "compressing -> ${IMG}.xz"
+xz -T 0 -6 -f -k "$IMG"
+( cd "$DIST" && sha256sum "$(basename "$IMG").xz" > SHA256SUMS )
+if ! is_enabled "$KEEP_RAW_IMAGE"; then
+    rm -f "$IMG"
+fi
+
+ls -lh "$IMG"* "$DIST/SHA256SUMS"
+log "done. Flash with: sudo bmaptool copy ${IMG}.xz /dev/sdX  (or xz -d + dd)"

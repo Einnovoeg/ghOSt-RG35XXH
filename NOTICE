@@ -1,0 +1,65 @@
+ghOSt — third-party notices
+===========================
+
+ghOSt is distributed under the MIT licence (see LICENSE). Parts of it are
+derived from, or built on top of, the projects below. Their notices are kept
+here and in LICENSES/ so every copy of this source tree carries them.
+
+1. handtop — https://github.com/junsulee119/handtop
+   Licence: MIT, Copyright (c) 2026 Handtop contributors
+   Full text: LICENSES/MIT-handtop.txt
+   Used for:
+     - image/pack-image-rocknix.sh — the loop-free image assembly approach
+       (build/10-image.sh): FAT boot partition as a file via mkfs.vfat + mtools,
+       ext4 built with `mkfs.ext4 -d`, partitions dd'ed into an MBR image.
+     - overlay/usr/local/sbin/ghost-panel — port of rg35xxh-panel (screen panel
+       detection on board pin PE6).
+     - overlay/usr/local/sbin/ghost-wifi-import — port of rg35xxh-wifi-import
+       (Wi-Fi credentials from the boot partition).
+     - image/bootfiles/{wifi.txt,panel.txt,README.txt} — the idea of editable
+       provisioning files on the FAT partition.
+   ghOSt changes are listed in each file's header: PARTUUID boot script rebuild,
+   dual-panel DTB staging, host-identity stripping, ghOSt paths and systemd units.
+
+2. rg35xxh-cyberdeck — https://github.com/Einnovoeg/rg35xxh-cyberdeck,
+   a fork of https://github.com/hataketsu/rg35xxh-cyberdeck
+   Licence: GPL-2.0, Copyright (C) 2026 hataketsu (Arne Muco) and contributors
+   Full text: LICENSES/GPL-2.0.txt
+   Used for: the ROCKNIX mainline kernel boot chain, the empty-initramfs patch
+   (patches/kernel/configure-empty-initramfs.sh), the AXP717 regulator DTB patch
+   (scripts/patch-h700-dtb-regulators.py), the XFCE UI stage
+   (rootfs/build-ui-xfce.sh) and the ROCKNIX boot-flow notes in docs/.
+   These files are derivative works of the GPL-2.0 project and are therefore
+   distributed under GPL-2.0, not under this repository's MIT licence. Each one
+   carries a header saying so. Combining them with the MIT-licensed files is
+   permitted because the MIT licence is compatible with the GPL.
+
+3. ROCKNIX — https://github.com/ROCKNIX/distribution
+   Licence: GPL-2.0 (kernel, U-Boot and build tooling)
+   Used at build time only: the kernel and U-Boot are compiled from a ROCKNIX
+   checkout pinned in VERSIONS and the resulting binaries are placed in the
+   image. Source is available from upstream at the pinned commit.
+
+4. KNULLI — https://github.com/knulli-cfw/distribution
+   Licence: GPL-2.0
+   Used only by the experimental BOOT_FLOW=legacy path: prebuilt boot0/boot.img/
+   env.img blobs are staged from a KNULLI distribution checkout.
+
+5. iNTERCEPT — https://github.com/smittix/intercept
+   Licence: Apache-2.0
+   Cloned during the rootfs build into /opt/ghost/intercept (rootfs/build-rootfs.sh);
+   nothing is vendored in this repository. The clone keeps upstream's LICENSE and
+   NOTICE files, and ghOSt does not relicense it. The same applies to the other
+   tools cloned at build time (SpiderFoot, airgeddon, nishang, PowerShell Empire /
+   PowerSploit, pwndbg, RouterSploit, SecLists, whisper.cpp, SDR++ Brown,
+   kalibrate-rtl, auto-cpufreq); each keeps its own licence inside the image.
+
+6. Debian, Kali and BlackArch packages
+   Installed by apt from their own archives and redistributed inside the image
+   under each package's licence. ghOSt does not modify or relicense them.
+
+7. Anbernic / Allwinner boot chain and the H700 datasheet-derived pin mapping
+   The PE6 panel-select convention matches Anbernic's stock U-Boot behaviour;
+   only the observed behaviour is reimplemented, no vendor code is included.
+
+If you believe something here is missing or misattributed, please open an issue.

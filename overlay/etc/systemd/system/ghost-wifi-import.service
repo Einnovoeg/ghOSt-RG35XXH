@@ -1,0 +1,13 @@
+[Unit]
+Description=Import Wi-Fi settings from wifi.txt on the boot partition
+After=NetworkManager.service
+Wants=NetworkManager.service
+RequiresMountsFor=/boot
+ConditionPathExists=/boot/wifi.txt
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ghost-wifi-import
+
+[Install]
+WantedBy=multi-user.target

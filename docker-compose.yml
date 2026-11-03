@@ -3,7 +3,7 @@ name: ghost-rg35xxh
 
 # ghOSt-RG35XXH Build — Docker Compose
 # Usage: docker compose up --build
-# Output: ./output/ghOSt-RG35XXH-1.0.0.img.gz when complete
+# Output: ./output/ghOSt-RG35XXH-<version>-<sha>.img.xz + SHA256SUMS (+ .bmap)
 
 services:
   ghost-builder:

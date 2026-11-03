@@ -26,26 +26,43 @@ ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal
   - isolated loop-device and device-mapper repros succeed
   - the full 20GB partition layout also formats successfully in isolation
   - this means the current `mkfs.ext4: Operation not permitted while trying to determine filesystem size` failure looks transient in the live build path, not like a fundamental Docker/macOS incompatibility
-- `build.sh` was hardened after that verification:
-  - image assembly now waits for mapper devices to report a readable block size before formatting
-  - image assembly now uses a cleanup trap so loop and mapper devices are detached even if the stage fails partway through
-  - this change is syntax-checked and based on successful isolated repros, but it still needs confirmation in a full build run
+- Image assembly no longer depends on loop devices, device-mapper or mounts, which is what failed inside Docker Desktop on macOS. `image/pack-image-rocknix.sh` was rewritten on the approach used by junsulee119/handtop (`build/10-image.sh`):
+  - FAT boot partition built as a file with `mkfs.vfat -C` + mtools `mcopy`
+  - ext4 root partition built as a file with `mkfs.ext4 -d "$ROOTFS"` (populated directly from the rootfs directory, no mount)
+  - MBR written with `sfdisk` (fixed disk id), then u-boot SPL, boot.vfat and root.ext4 `dd`'d in at 8 KiB / 16 MiB / 272 MiB
+  - `e2fsck -fn` validates the root filesystem before the image is assembled
+  - this removes the `mkfs.ext4: Operation not permitted while trying to determine filesystem size` failure entirely instead of retrying around it
+- The packer also now:
+  - regenerates `boot.scr` from `patches/uboot/boot.cmd` with `root=PARTUUID=<disk-id>-02` (replaces `root=/dev/mmcblk0p2`, which breaks when the card is in the other SD slot); falls back to the committed blob if `mkimage` is absent
+  - strips host identity before shipping: `machine-id`, ssh host keys, `qemu-aarch64-static`, apt caches, and any stale `/boot` payload
+  - sizes the image from the actual rootfs (`IMAGE_SIZE_GB` is now a floor, not a cap), and emits `.img.xz` + `SHA256SUMS` (+ `.bmap` when `bmaptool` exists)
+- `mtools` added to the Dockerfile; `ROOTFS_DIR` is env-overridable; `IMAGE_SIZE_GB` is no longer pinned in `VERSIONS` (config.sh owns it).
+- Verified with a stubbed harness (`build/pack-selftest.sh`, not part of the build): partition offsets, labels, u-boot offset, boot.scr PARTUUID rewrite and rootfs sanitisation all assert clean. A real Docker run is still outstanding — see below.
+- Two more handtop behaviours were ported, both aimed at a unit you cannot see:
+  - **panel safety**: the image now ships `dtb-regular.img` and `dtb-rev6.img`, `boot.cmd` loads `dtb.img`, and `ghost-panel.service` reads board pin PE6 each boot (via GPIO uAPI v2), swaps `dtb.img` when the unit has the other panel, and restarts once. Loop-guarded, logged to `logs/panel.txt`, no-op when the file was edited by hand. `panel.txt` on the boot partition overrides detection.
+  - **pre-boot provisioning**: `ghost-wifi-import.service` imports `wifi.txt` from the FAT partition into NetworkManager and blanks the password; `panel.txt`, `wifi.txt` and `README.txt` are staged with CRLF so they are editable from Windows.
+  - files: `overlay/usr/local/sbin/ghost-panel`, `overlay/usr/local/sbin/ghost-wifi-import`, the two matching units, `image/bootfiles/*`, and `patches/uboot/boot.cmd` (now loads `dtb.img`).
+- Output naming reconciled across `README.md`, `docker-compose.yml`, `DOCKER_BUILD.md` and `docker-entrypoint.sh` (`.img.xz`, not the old `.img.gz`); the flash helpers accept `.img.xz` and only attempt GPT repair when the written media really has a GPT header (the shipped image is MBR).
+- The macOS flash helper had a zsh bug (`[[ $x =~ '^disk[0-9]+$' ]]` with a quoted pattern matches literally), so disk selection could never succeed; fixed.
+- CI (`static` job) now installs `mtools`/`fdisk`/`e2fsprogs` — without them the loop-free packer cannot run in Actions — and gates the long build on the test suite in `tests/`.
+- `kernel/build-rocknix.sh` patches both DTBs (regular and rev6-panel) and warns when the kernel tree has no rev6 DTB.
 
 ### 3. Steps that need to be taken next
 
-1. Re-run the full Docker build from the cached state and see whether the new mapper-readiness checks clear the final image-assembly failure:
+1. Re-run the full Docker build from the cached state. The image stage no longer needs privileged loop support, but the container still needs `--privileged` for the chroot stages:
    `docker compose up --build`
-   Do not use `SKIP_KERNEL=true` for the verification run unless `/opt/ghost-build/boot0.img` and the other staged boot assets already exist, because the image-only path currently stops early when those files are absent.
-2. If the build still fails in `assemble_image()`, collect live state from inside the failed container before restarting:
-   - `ls -l /dev/mapper`
-   - `blockdev --getsize64 /dev/mapper/loop0p3`
-   - `dmsetup table`
-   - `losetup -a`
-3. If the mapper path still flakes, switch `assemble_image()` to use direct loop partition nodes when available, with mapper nodes as fallback. This has not been necessary in isolated repros yet, so do not change it blindly.
-4. Once the image is produced, verify the artifact in `/Volumes/Mac Stick/Projects/ghOSt-RG35XXH/output/`, update the release notes and README if needed, and only then move on to the broader repo-cleanup and licensing work.
+   Do not use `SKIP_KERNEL=true` for the verification run unless `/opt/ghost-build/boot0.img` and the other staged boot assets already exist.
+2. If `pack-image-rocknix.sh` fails, it now fails on a specific, checkable input rather than on loop setup. Confirm the three artifacts it names: the u-boot SPL under `install_pkg/u-boot-*/usr/share/bootloader/`, `<KERNEL_NAME>/arch/arm64/boot/Image`, and `dts/allwinner/$DTB_NAME`. For a test without a kernel build, point `GHOST_UBOOT_BIN`, `GHOST_KERNEL_IMAGE` and `GHOST_DTB_FILE` at files.
+3. Flash the resulting `output/ghOSt-RG35XXH-<version>-<sha>.img.xz` and confirm on hardware: u-boot loads `Image`/`dtb.img`/`boot.scr` from p1, the kernel mounts p2 by PARTUUID, and first boot runs `expand-rootfs`.
+4. Check the two ported behaviours on the unit: `journalctl -u ghost-panel` should say the DTB matches (or switch once and restart); filling `wifi.txt` on the card before boot should join the network without a keyboard.
+5. Update the release notes and README if needed, then move on to the broader repo-cleanup and licensing work.
 
 ### Files most recently changed during this recovery work
 
+- `image/pack-image-rocknix.sh` (loop-free assembly)
+- `config.sh` (`UBOOT_GAP_MIB`, `BOOT_PART_MIB`, `BOOT_LABEL`, `ROOT_LABEL`, `DISK_ID`, `KEEP_RAW_IMAGE`, overridable `ROOTFS_DIR`)
+- `VERSIONS` (no longer pins `IMAGE_SIZE_GB`)
+- `Dockerfile` (`mtools`)
 - `build.sh`
 - `rootfs/build-rootfs.sh`
 - `kernel/build-kernel.sh`
@@ -54,6 +71,16 @@ ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal
 - `overlay/opt/ghost/scripts/ram-audit.sh`
 - `overlay/opt/ghost/themes/ghost-theme.py`
 - `overlay/opt/ghost/themes/generate-wallpaper.py`
+
+## Tests
+
+`./tests/run-all.sh` runs the fast suites (no Docker, no ARM toolchain):
+
+- `static-checks.sh` — all shell/python parses, boot-chain file names agree across `boot.cmd`, the packer and `config.sh`, boot files exist, `.img.xz` naming has no `.img.gz` stragglers, CI installs the packer's tools.
+- `units-test.sh` — every overlay unit has `[Unit]`/`[Service]`/`[Install]`/`Type`/`ExecStart`, `ExecStart` binaries exist in the overlay, `After`/`Before`/`Wants`/`Requires` resolve, and every `systemctl enable` in `configure.sh` is backed by a unit.
+- `pack-image-test.sh` — runs the real packer against a fake rootfs. As root with Linux tools it inspects the produced image (MBR offsets, FAT contents, `boot.scr` payload, CRLF boot files, ext4 label, host identity stripped); otherwise it stubs the tools and asserts the commands issued.
+
+CI runs it as the `static` job before the long build. Run it as root to get the real-tools path.
 
 ## Project Overview
 
@@ -404,16 +431,16 @@ sudo ./build.sh
 sudo KALI_SIZE=large INCLUDE_AI=true ./build.sh
 ```
 
-**Output:** `build/output/ghOSt-RG35XXH-1.0.0.img.gz`
+**Output:** `build/output/ghOSt-RG35XXH-<version>-<sha>.img.xz` (+ `SHA256SUMS`, `.bmap`)
 
 **Flash (Linux):**
 ```bash
-./flash_dd_with_gpt.sh /path/to/ghOSt-1.0.0-rg35xxh.img.gz /dev/sdX
+./flash_dd_with_gpt.sh /path/to/ghOSt-RG35XXH-*.img.xz /dev/sdX
 ```
 
 **Flash (macOS):**
 ```bash
-./flash_dd_with_gpt.MacOS.sh /path/to/ghOSt-1.0.0-rg35xxh.img.gz /dev/diskN
+./flash_dd_with_gpt.MacOS.sh /path/to/ghOSt-RG35XXH-*.img.xz /dev/diskN
 ```
 
 ---

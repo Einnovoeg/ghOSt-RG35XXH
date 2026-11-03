@@ -17,7 +17,24 @@ on:
         default: 'xfce'
 
 jobs:
+  # Fast checks that need no Docker: syntax, unit wiring and a real packer run.
+  static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install test deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            mtools dosfstools e2fsprogs fdisk u-boot-tools xz-utils shellcheck python3
+
+      - name: Static checks + image packer (root so mkfs -d sets ownership)
+        run: sudo ./tests/run-all.sh
+
   build:
+    needs: static
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
@@ -32,8 +49,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             debootstrap qemu-user-static binfmt-support \
-            kpartx parted gdisk dosfstools xz-utils bmap-tools \
-            device-tree-compiler rsync u-boot-tools git curl python3
+            kpartx parted gdisk dosfstools mtools fdisk e2fsprogs \
+            xz-utils bmap-tools device-tree-compiler rsync u-boot-tools \
+            git curl python3
           sudo systemctl restart binfmt-support || true
 
       - name: Cache ROCKNIX build tree

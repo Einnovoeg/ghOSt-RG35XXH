@@ -108,11 +108,15 @@ preflight() {
 
     local required_tools=(
         debootstrap qemu-user-static binfmt-support
-        parted kpartx rsync git wget curl
+        rsync git wget curl
         python3 python3-pip make gcc flex bison bc
         libssl-dev libelf-dev lzop u-boot-tools
         crossbuild-essential-arm64 gcc-aarch64-linux-gnu
         zip unzip xz-utils lz4 zstd pv
+        # Image assembly (loop-free): FAT via mtools, ext4 direct, MBR via sfdisk.
+        # parted/kpartx are only used by the experimental BOOT_FLOW=legacy path.
+        mtools dosfstools e2fsprogs fdisk
+        parted kpartx
     )
 
     log "Checking required host tools..."
@@ -299,7 +303,9 @@ assemble_image() {
 }
 
 assemble_image_legacy() {
-    section "Assembling Flash Image"
+    section "Assembling Flash Image (legacy KNULLI/GPT)"
+    warn "This path needs losetup/kpartx and real mounts; it does not work in Docker Desktop on macOS."
+    warn "The default BOOT_FLOW=rocknix assembly is loop-free — use it unless you are experimenting."
 
     local img="$OUTPUT_DIR/ghOSt-RG35XXH-${GHOST_VERSION}.img"
     local img_size_mb=$(( ROOT_SIZE_MB + SWAP_SIZE_MB + 160 ))

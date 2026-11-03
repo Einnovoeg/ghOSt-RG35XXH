@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # =============================================================================
 # ghOSt Linux Flash Script
-# Writes a ghOSt .img or .img.gz file to removable media and repairs GPT.
-# This is intended for Linux hosts where raw dd flashes can leave the backup
-# GPT header needing recovery on first use.
+# Writes a ghOSt .img / .img.xz / .img.gz to removable media.
+# The shipped image is MBR (no GPT), so GPT repair only runs when the written
+# media actually has a GPT header; .xz is decompressed on the fly.
 # =============================================================================
 set -euo pipefail
 
@@ -23,8 +23,10 @@ SELECTED_IMAGE=""
 SELECTED_DEVICE=""
 
 show_images() {
-    mapfile -t IMAGES < <(find . -maxdepth 1 -type f \( -iname "*.img" -o -iname "*.img.gz" \) -printf "%f\n" | sort)
-    [[ ${#IMAGES[@]} -gt 0 ]] || log_error "No .img or .img.gz files found in $(pwd)"
+    mapfile -t IMAGES < <(find . -maxdepth 1 -type f \
+        \( -iname "*.img" -o -iname "*.img.xz" -o -iname "*.img.gz" \) \
+        -printf "%f\n" | sort)
+    [[ ${#IMAGES[@]} -gt 0 ]] || log_error "No .img, .img.xz or .img.gz files found in $(pwd)"
 
     log_info "Available images:"
     local i=1
@@ -90,16 +92,31 @@ unmount_device() {
 
 flash_image() {
     log_info "Flashing $SELECTED_IMAGE to $SELECTED_DEVICE"
-    if [[ "$SELECTED_IMAGE" == *.gz ]]; then
-        gzip -dc "$SELECTED_IMAGE" | $ESUDO dd of="$SELECTED_DEVICE" bs=4M status=progress conv=fsync,notrunc
-    else
-        $ESUDO dd if="$SELECTED_IMAGE" of="$SELECTED_DEVICE" bs=4M status=progress conv=fsync,notrunc
-    fi
+    case "$SELECTED_IMAGE" in
+        *.xz)
+            command -v xz >/dev/null 2>&1 || log_error "xz is required to decompress $SELECTED_IMAGE"
+            xz -dc "$SELECTED_IMAGE" | $ESUDO dd of="$SELECTED_DEVICE" bs=4M status=progress conv=fsync,notrunc
+            ;;
+        *.gz)
+            gzip -dc "$SELECTED_IMAGE" | $ESUDO dd of="$SELECTED_DEVICE" bs=4M status=progress conv=fsync,notrunc
+            ;;
+        *)
+            $ESUDO dd if="$SELECTED_IMAGE" of="$SELECTED_DEVICE" bs=4M status=progress conv=fsync,notrunc
+            ;;
+    esac
     sync
     log_success "Image write complete"
 }
 
+has_gpt() {
+    [[ "$(LC_ALL=C dd if="$SELECTED_DEVICE" bs=512 skip=1 count=1 2>/dev/null | head -c 8)" == "EFI PART" ]]
+}
+
 repair_gpt() {
+    if ! has_gpt; then
+        log_info "Image uses MBR partitions — no GPT backup header to repair"
+        return 0
+    fi
     log_info "Repairing GPT backup header on $SELECTED_DEVICE"
 
     if command -v sgdisk >/dev/null 2>&1; then

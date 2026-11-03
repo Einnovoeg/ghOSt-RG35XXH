@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Derived from rg35xxh-cyberdeck (GPL-2.0, Copyright (C) 2026 hataketsu (Arne Muco)
+# and contributors; https://github.com/hataketsu/rg35xxh-cyberdeck).
+# This file is distributed under GPL-2.0, not MIT: see LICENSES/GPL-2.0.txt.
 """
 Patch H700 (RG35XXH/RG40XX/RGcubeXX) DTB to add regulator-always-on to
 all empty AXP717 PMIC regulator nodes. Prevents the late-init "aldo3:

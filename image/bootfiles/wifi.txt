@@ -1,0 +1,7 @@
+# Wi-Fi for ghOSt. Fill this in on a PC, save, put the card back and boot.
+# The network is added once and the password line is blanked afterwards.
+# Lines starting with # are ignored. Leave PASSWORD empty for an open network.
+SSID=
+PASSWORD=
+# Optional: two-letter country code for Wi-Fi channels (e.g. US, GB, DE, JP)
+COUNTRY=

@@ -10,6 +10,13 @@ ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default 
 > Legacy KNULLI 4.9 + GPT (`BOOT_FLOW=legacy`) is kept for experiments only.
 > See `docs/PITFALLS-cyberdeck.md`, `VERSIONS`, `image/pack-image-rocknix.sh`.
 
+## Licence
+
+MIT — see `LICENSE`. Parts are derived from [handtop](https://github.com/junsulee119/handtop)
+(MIT) and the code is built on ROCKNIX/KNULLI (GPL-2.0) and a set of tools cloned at
+build time; `NOTICE` lists every source, what was used and under which licence, and
+`LICENSES/` keeps the upstream notices verbatim.
+
 ## Build (local)
 
 Docker is the fastest path:
@@ -33,6 +40,21 @@ When the build completes, flash `build/output/ghOSt-RG35XXH-*.img.xz` to an SD c
 xz -d build/output/ghOSt-*.img.xz
 sudo bmaptool copy build/output/ghOSt-*.img /dev/sdX
 ```
+
+## Boot partition (no keyboard needed)
+
+The FAT partition (label `BOOT`, mounted at `/boot`) carries the kernel, `dtb*.img`,
+`boot.scr` and three files you can edit from any PC:
+
+- `wifi.txt` — `SSID`, `PASSWORD`, optional `COUNTRY`. Imported into NetworkManager
+  on the next boot; the password is then removed from the file.
+- `panel.txt` — `auto` (default), `regular` or `rev6`. Retail units ship with one of
+  two screens; `ghost-panel.service` reads board pin PE6 on every boot and swaps
+  `dtb.img` for the matching device tree if needed, restarting once.
+- `README.txt` — the same instructions, on the card.
+
+Diagnostics (`logs/panel.txt`, boot logs) are written back to this partition, so a
+garbled screen or missing Wi-Fi can be diagnosed from Windows/macOS.
 
 ## Build from GitHub (CI — no local Linux needed)
 

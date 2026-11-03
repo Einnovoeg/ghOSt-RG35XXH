@@ -17,7 +17,7 @@ DEVICE_TARGET="rg35xxh"               # rg35xxh | rg40xxh | rg35xx-2024
 # Use local paths to avoid requiring root/sudo
 # -----------------------------------------------------------------------------
 BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/build"
-ROOTFS_DIR="$BUILD_DIR/rootfs"
+ROOTFS_DIR="${ROOTFS_DIR:-$BUILD_DIR/rootfs}"
 KERNEL_BUILD_DIR="$BUILD_DIR/kernel"
 UBOOT_BUILD_DIR="$BUILD_DIR/uboot"
 OUTPUT_DIR="$BUILD_DIR/output"
@@ -83,7 +83,18 @@ UI_MODE="${UI_MODE:-xfce}"
 INCLUDE_XFCE="${INCLUDE_XFCE:-true}"
 
 # Final image size for rocknix flow (GB). Rootfs expands to fill SD on 1st boot.
+# 0 = size the image from the actual rootfs contents (+25% headroom) instead.
 IMAGE_SIZE_GB="${IMAGE_SIZE_GB:-12}"
+
+# MBR layout for the rocknix flow (u-boot SPL sits in the gap before p1).
+UBOOT_GAP_MIB="${UBOOT_GAP_MIB:-16}"      # 8 KiB..16 MiB reserved for u-boot
+BOOT_PART_MIB="${BOOT_PART_MIB:-256}"     # FAT p1: KERNEL, DTB, boot.scr
+BOOT_LABEL="${BOOT_LABEL:-BOOT}"          # FAT label (max 11 chars)
+ROOT_LABEL="${ROOT_LABEL:-rootfs}"        # ext4 label used by /etc/fstab
+DISK_ID="${DISK_ID:-0x47334f53}"          # MBR disk id; root=PARTUUID=<id>-02
+
+# Keep the uncompressed .img next to the .xz (needs ~12GB extra space)
+KEEP_RAW_IMAGE="${KEEP_RAW_IMAGE:-false}"
 
 # -----------------------------------------------------------------------------
 # H700 BOOT CHAIN SOURCE
@@ -111,8 +122,13 @@ DEBIAN_MIRROR="http://deb.debian.org/debian"
 DEBIAN_RELEASE="${DEBIAN_RELEASE:-trixie}"
 DEBIAN_ARCH="arm64"
 
-# DTB for retail RG35XXH (NOT rev6-panel which shows 1 white line on retail).
+# Device trees for both screen panels. The packer ships both and ghost-panel
+# copies the matching one over dtb.img at boot (see image/bootfiles/panel.txt).
 DTB_NAME="${DTB_NAME:-sun50i-h700-anbernic-rg35xx-h.dtb}"
+DTB_REV6_NAME="${DTB_REV6_NAME:-sun50i-h700-anbernic-rg35xx-h-rev6-panel.dtb}"
+# ROCKNIX ships one U-Boot SPL per RAM type (H700_DDR4_..., H700_DDR3_...).
+# RG35XXH boards are DDR4; set UBOOT_DDR=DDR3 only for a different H700 board.
+UBOOT_DDR="${UBOOT_DDR:-DDR4}"
 
 # -----------------------------------------------------------------------------
 # KALI REPOSITORY

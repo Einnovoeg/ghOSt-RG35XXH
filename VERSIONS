@@ -20,8 +20,8 @@ DEVICE=H700
 ARCH=aarch64
 DTB_NAME=sun50i-h700-anbernic-rg35xx-h.dtb
 
-# Final SD image size (GB). Rootfs expands to fill larger cards on first boot.
-IMAGE_SIZE_GB=12
+# Image sizing lives in config.sh (IMAGE_SIZE_GB); do not pin it here, it is
+# tuned per build (a fat toolset grows the partition).
 
 # Desktop user created in the XFCE stage. ghOSt uses 'ghost' (not upstream 'hataketsu').
 TARGET_USER=ghost

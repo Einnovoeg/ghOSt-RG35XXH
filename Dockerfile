@@ -67,6 +67,7 @@ RUN echo 'Acquire::Retries "10";' > /etc/apt/apt.conf.d/80retries \
     parted \
     kpartx \
     dosfstools \
+    mtools \
     e2fsprogs \
     bmap-tools \
     gdisk \

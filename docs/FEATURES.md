@@ -154,7 +154,8 @@ Status values:
 | CI builds, caches the release image, uploads an artifact, releases on tag | done | `.github/workflows/build.yml` |
 | Fast suite gates the long build | done | `tests/run-all.sh` in the `static` job |
 | Licence compliance for derived files | done | `LICENSE`, `NOTICE`, `LICENSES/`, per-file headers, enforced by `tests/static-checks.sh` |
-| No passwordless root, no shipped default password | open | `build-ui-xfce.sh` writes `NOPASSWD: ALL`; `configure.sh` restricts commands; password is `CaptainCrunch` |
+| No passwordless root | done | both stages write the same restricted command list; the suite fails if `NOPASSWD: ALL` reappears |
+| No shipped default password | open | still `CaptainCrunch`; SSH is key-only, so this is a local-only exposure until first boot sets a real password |
 | Image produced by this pipeline, flashed and booted | open | packing in progress; hardware untested |
 
 ## How this list was checked

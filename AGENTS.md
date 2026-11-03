@@ -88,6 +88,10 @@ ghOSt is a custom Debian Trixie ARM64 image for the Anbernic RG35XXH. The goal i
 - `static-checks.sh` — all shell/python parses, boot-chain file names agree across `boot.cmd`, the packer and `config.sh`, boot files exist, `.img.xz` naming has no `.img.gz` stragglers, CI installs the packer's tools.
 - `units-test.sh` — every overlay unit has `[Unit]`/`[Service]`/`[Install]`/`Type`/`ExecStart`, `ExecStart` binaries exist in the overlay, `After`/`Before`/`Wants`/`Requires` resolve, and every `systemctl enable` in `configure.sh` is backed by a unit.
 - `pack-image-test.sh` — runs the real packer against a fake rootfs. As root with Linux tools it inspects the produced image (MBR offsets, FAT contents, `boot.scr` payload, CRLF boot files, ext4 label, host identity stripped); otherwise it stubs the tools and asserts the commands issued.
+- `boot-fetch-test.sh` — runs the release-payload extractor against a synthetic release image (real `mkfs`/mtools/`debugfs`, or stubs on a Mac) and proves a wrong checksum is refused.
+- `panel-test.sh` — the panel cases from `docs/panel.md`: a pin reading alone never moves a working screen onto the rev6 tree, `panel.txt` can force either tree, a card moved to a regular unit is restored, and a hand-edited `dtb.img` is left alone.
+- `launcher-test.sh` — every menu entry has a label and a command, `requires` uses only `commands`/`paths`, and no guarded list is empty.
+- `wifi-import-test.sh` — imports `wifi.txt` with a stubbed `nmcli`, blanks the password, keeps it when NetworkManager refuses the settings, and does nothing when the SSID is empty.
 
 CI runs it as the `static` job before the long build. Run it as root to get the real-tools path.
 

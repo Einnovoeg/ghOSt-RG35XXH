@@ -110,7 +110,7 @@ mcopy -s -i "$IMG@@$FAT_OFF" ::/* "$WORK/boot/" 2>/dev/null || \
 
 # --- pull what we need out of the ext4 rootfs -------------------------------
 ROOT_PART="$WORK/root.part"
-log "extracting the rootfs partition ($(( ROOT_SIZE / 1024 / 1024 ))MiB) to read modules and U-Boot"
+log "extracting the rootfs partition ($(( ROOT_SIZE * 512 / 1024 / 1024 ))MiB) to read modules and U-Boot"
 dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
 mkdir -p "$WORK/root/usr/share/bootloader" "$WORK/root/lib/modules" "$WORK/root/lib/firmware"
 for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
@@ -127,8 +127,11 @@ find_first() { # $1... = search roots, rest handled by caller predicate
 IMAGE_SRC="$(find "$WORK/boot" "$WORK/root/usr/share/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
 [[ -n "$IMAGE_SRC" ]] || error "no kernel Image in the boot payload (boot listing: $(head -5 "$WORK/boot-listing.txt" | tr '\n' ' '))"
 
-mapfile -t DTBS < <(find "$WORK/boot" "$WORK/root/usr/share/bootloader" -maxdepth 4 \
-                        \( -name '*rg35xx*.dtb' -o -name '*h700*.dtb' \) 2>/dev/null | sort -u)
+# bash 3.2 (macOS /bin/bash) has no mapfile, so build the list with a read loop
+DTBS=()
+while IFS= read -r d; do DTBS+=("$d"); done < <(
+    find "$WORK/boot" "$WORK/root/usr/share/bootloader" -maxdepth 4 \
+         \( -name '*rg35xx*.dtb' -o -name '*h700*.dtb' \) 2>/dev/null | sort -u)
 (( ${#DTBS[@]} )) || error "no device trees in the boot payload"
 
 UBOOT_SRC="$(find "$WORK/root/usr/share/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
@@ -156,12 +159,16 @@ done
 cp "$BOOT_STAGE/dtb-regular.img" "$BOOT_STAGE/dtb.img"
 
 # modules + firmware must match this kernel exactly, so they come from the same image
+# Each module tree is named after its kernel version; keep that directory, or
+# modprobe looks in the wrong place and every driver silently fails to load.
 mods=0 fw=0
-for m in "$WORK"/root/lib/modules/*/; do
+while IFS= read -r m; do
     [[ -d "$m" ]] || continue
-    rsync -a "$m" "$OVERLAY/lib/modules/"
+    ver="$(basename "$m")"
+    rsync -a "$m/" "$OVERLAY/lib/modules/$ver/"
+    log "modules: $ver"
     mods=$(( mods + 1 ))
-done
+done < <(find "$WORK/root/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
 for f in "$WORK/root/lib/firmware" "$WORK/root/usr/lib/firmware"; do
     [[ -d "$f" ]] || continue
     rsync -a "$f/" "$OVERLAY/lib/firmware/"

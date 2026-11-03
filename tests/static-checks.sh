@@ -145,6 +145,11 @@ grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
     && ok "extractor detects an embedded initramfs" \
     || bad "embedded initramfs would bypass the rootfs unnoticed"
 
+# every image must enable the remote shell, not only the XFCE builds
+grep -qE 'systemctl enable ssh' overlay/opt/ghost/scripts/configure.sh \
+    && ok "configure.sh enables sshd for every UI mode" \
+    || bad "cage-only images would ship with sshd disabled"
+
 # cage-only images have no foot: first boot must still reach the console
 grep -q 'command -v foot' firstboot/firstboot.sh \
     && ok "firstboot falls back to the console without foot" \

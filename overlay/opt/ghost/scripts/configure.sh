@@ -872,6 +872,9 @@ systemctl enable ghost-wifi-import.service 2>/dev/null || true
 # Boot diagnostics on the FAT partition, so a device that misbehaves can be read
 # from a PC. The unit is guarded by ConditionPathExists=/boot/logs.
 systemctl enable dump-boot-logs.service 2>/dev/null || true
+# Remote shell is a core feature; the XFCE stage enables it, but a cage-only
+# image (INCLUDE_XFCE=false) never runs that stage, so enable it here too.
+systemctl enable ssh 2>/dev/null || true
 
 # Apply default theme (catppuccin)
 if ! sudo -u "$GHOST_USER" python3 /opt/ghost/themes/ghost-theme.py catppuccin; then

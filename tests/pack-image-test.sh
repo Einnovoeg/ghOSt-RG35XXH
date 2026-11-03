@@ -50,7 +50,7 @@ run_packer() { # $1 = rev6 dtb path
 }
 
 if (( HAVE_REAL )); then
-    echo "-- mode: real tools ($(mkfs.vfat --version 2>&1 | head -1))"
+    echo "-- mode: real tools"
     mkdir -p "$H/dist"
     if ! run_packer "$A/dtb-rev6" > "$H/pack.log" 2>&1; then
         bad "packer failed"
@@ -61,29 +61,44 @@ if (( HAVE_REAL )); then
     IMG="$(ls "$H"/dist/*.img | head -1)"
     [[ -f "$IMG" ]] && ok "raw image kept" || bad "no raw image"
 
-    # partition table: MBR, bootable FAT at 16MiB, ext4 at 272MiB
+    # partition table: MBR, bootable FAT at 16MiB, ext4 at 272MiB.
+    # sfdisk pads its numbers, so parse instead of grepping fixed strings.
     sfdisk -d "$IMG" > "$H/sf.txt" 2>/dev/null
-    grep -q "label: dos" "$H/sf.txt" && ok "MBR (dos) partition table" || bad "not MBR"
-    grep -q "start=32768" "$H/sf.txt" && ok "p1 starts at 16MiB" || bad "p1 offset wrong"
-    grep -q "start=557056" "$H/sf.txt" && ok "p2 starts at 272MiB" || bad "p2 offset wrong"
-    grep -qE "start=32768,.*bootable" "$H/sf.txt" && ok "p1 marked bootable" || bad "p1 not bootable"
-    grep -q "label-id: 0x47334f53" "$H/sf.txt" && ok "fixed disk id" || bad "disk id wrong"
+    python3 - "$H/sf.txt" > "$H/sf.tsv" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+print("label_dos=%s" % ("yes" if re.search(r"^label:\s*dos", text, re.M) else "no"))
+m = re.search(r"^label-id:\s*(0x[0-9a-fA-F]+)", text, re.M)
+print("disk_id=%s" % (m.group(1) if m else "none"))
+lines = [l for l in text.splitlines() if re.search(r"start=\s*\d+", l)]
+for i, line in enumerate(lines[:2], 1):
+    print("p%d_start=%s" % (i, re.search(r"start=\s*(\d+)", line).group(1)))
+    print("p%d_size=%s" % (i, re.search(r"size=\s*(\d+)", line).group(1)))
+    print("p%d_boot=%s" % (i, "yes" if "bootable" in line else "no"))
+PY
+    grep -qx 'label_dos=yes' "$H/sf.tsv" && ok "MBR (dos) partition table" || bad "not MBR"
+    grep -qx 'p1_start=32768' "$H/sf.tsv" && ok "p1 starts at 16MiB" \
+        || bad "p1 offset wrong ($(grep '^p1_' "$H/sf.tsv" | tr '\n' ' '))"
+    grep -qx 'p2_start=557056' "$H/sf.tsv" && ok "p2 starts at 272MiB" \
+        || bad "p2 offset wrong ($(grep '^p2_' "$H/sf.tsv" | tr '\n' ' '))"
+    grep -qx 'p1_boot=yes' "$H/sf.tsv" && ok "p1 marked bootable" || bad "p1 not bootable"
+    grep -qx 'disk_id=0x47334f53' "$H/sf.tsv" && ok "fixed disk id" || bad "disk id wrong"
 
-    # extract partitions for inspection
-    python3 - "$IMG" "$H" <<'PY'
-import re, subprocess, sys
-img, out = sys.argv[1], sys.argv[2]
-txt = subprocess.run(["sfdisk", "-d", img], capture_output=True, text=True).stdout
-parts = re.findall(r"start=\s*(\d+),\s*size=\s*(\d+)", txt)
-for i, (start, size) in enumerate(parts[:2], 1):
-    with open(f"{out}/p{i}.part", "wb") as fh:
-        subprocess.run(["dd", f"if={img}", f"of={out}/p{i}.part", "bs=512",
-                        f"skip={start}", f"count={size}", "status=none"], check=True)
-print("extracted", len(parts[:2]), "partitions")
+    # extract partitions for inspection using the parsed geometry
+    python3 - "$IMG" "$H/sf.tsv" "$H" <<'PY'
+import subprocess, sys
+img, tsv, out = sys.argv[1:4]
+vals = dict(l.strip().split("=", 1) for l in open(tsv) if "=" in l)
+for i in (1, 2):
+    subprocess.run(["dd", f"if={img}", f"of={out}/p{i}.part", "bs=512",
+                    f"skip={vals['p%d_start' % i]}", f"count={vals['p%d_size' % i]}",
+                    "status=none"], check=True)
+print("extracted 2 partitions")
 PY
 
     # FAT boot partition contents
-    mdir -i "$H/p1.part" ::/ > "$H/fat.txt" 2>/dev/null
+    # -b (brief) prints full names one per line; the default wide listing hides them
+    mdir -b -i "$H/p1.part" ::/ > "$H/fat.txt" 2>/dev/null
     for f in Image dtb.img dtb-regular.img dtb-rev6.img boot.scr boot.cmd \
              wifi.txt panel.txt README.txt logs; do
         grep -qi "$f" "$H/fat.txt" && ok "boot partition has $f" || bad "boot partition missing $f"

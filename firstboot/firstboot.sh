@@ -16,8 +16,14 @@ SETUP_DONE="/var/lib/ghost/.firstboot_done"
 # Give the GUI a moment to start
 sleep 5
 
-# Launch firstboot in foot terminal
-foot -- bash /usr/local/bin/firstboot-interactive.sh &
+# Launch the interactive setup in a terminal. XFCE images have foot; a cage-only
+# image (INCLUDE_XFCE=false) does not, and the setup must still run on the console
+# instead of being skipped entirely.
+if command -v foot >/dev/null 2>&1; then
+    foot -- bash /usr/local/bin/firstboot-interactive.sh &
+else
+    setsid -w bash /usr/local/bin/firstboot-interactive.sh </dev/tty1 >/dev/tty1 2>&1 &
+fi
 wait $!
 
 mkdir -p /var/lib/ghost

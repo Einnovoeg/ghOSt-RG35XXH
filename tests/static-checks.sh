@@ -145,6 +145,11 @@ grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
     && ok "extractor detects an embedded initramfs" \
     || bad "embedded initramfs would bypass the rootfs unnoticed"
 
+# cage-only images have no foot: first boot must still reach the console
+grep -q 'command -v foot' firstboot/firstboot.sh \
+    && ok "firstboot falls back to the console without foot" \
+    || bad "firstboot needs foot and silently does nothing without it"
+
 # firstboot.sh launches the interactive setup; it has to be installed too
 grep -q 'firstboot-interactive.sh' firstboot/firstboot.sh \
     && grep -q 'cp .*firstboot-interactive.sh' build.sh \

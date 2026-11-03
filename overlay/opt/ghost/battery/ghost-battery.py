@@ -129,13 +129,14 @@ class BatteryManager:
         for p in paths:
             if write_sysfs(p, pct):
                 return True
-        # Try via upower if sysfs doesn't work
+        # Try via upower if sysfs doesn't work. Only claim success when upower
+        # actually accepted it, or the limit silently never applies.
         try:
-            subprocess.run(
+            r = subprocess.run(
                 ["upower", "--set-charge-thresholds",
                  f"--charge-end-threshold={pct}"],
                 capture_output=True, timeout=5)
-            return True
+            return r.returncode == 0
         except Exception:
             pass
         return False

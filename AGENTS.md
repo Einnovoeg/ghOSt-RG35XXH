@@ -92,6 +92,8 @@ ghOSt is a custom Debian Trixie ARM64 image for the Anbernic RG35XXH. The goal i
 - `panel-test.sh` — the panel cases from `docs/panel.md`: a pin reading alone never moves a working screen onto the rev6 tree, `panel.txt` can force either tree, a card moved to a regular unit is restored, and a hand-edited `dtb.img` is left alone.
 - `launcher-test.sh` — every menu entry has a label and a command, `requires` uses only `commands`/`paths`, and no guarded list is empty.
 - `wifi-import-test.sh` — imports `wifi.txt` with a stubbed `nmcli`, blanks the password, keeps it when NetworkManager refuses the settings, and does nothing when the SSID is empty.
+- `power-test.sh` — the six documented `ghost-power` profiles are offered and an unknown profile is refused before anything writes to cpufreq.
+- `python-deps-test.sh` — every third-party module a shipped tool imports (`sdl2`, `evdev`, `psutil`, `Pillow`) is installed by some build stage.
 
 CI runs it as the `static` job before the long build. Run it as root to get the real-tools path.
 

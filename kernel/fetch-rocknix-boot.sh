@@ -139,7 +139,7 @@ if [[ -n "$ROOT_OFF" ]]; then
     else
         dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
     fi
-    mkdir -p "$WORK/root"
+    mkdir -p "$WORK/root" "$WORK/x"
     for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
         debugfs -R "rdump ${p} $WORK/x" "$ROOT_PART" > "$WORK/dbg.log" 2>&1 || true
         src="$WORK/x/$(basename "$p")"
@@ -148,7 +148,9 @@ if [[ -n "$ROOT_OFF" ]]; then
             rm -rf "$WORK/root$p"
             mv "$src" "$WORK/root$p"
         fi
-        log "ext4 ${p}: $(find "$WORK/root$p" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
+        n="$(find "$WORK/root$p" -type f 2>/dev/null | wc -l | tr -d ' ')"
+        log "ext4 ${p}: ${n} file(s)"
+        (( n > 0 )) || warn "  debugfs: $(head -2 "$WORK/dbg.log" | tr '\n' ' ')"
     done
     # keep it only if it actually held something we need; a small ext4 may be a
     # recovery or storage partition rather than the root filesystem

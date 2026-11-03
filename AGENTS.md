@@ -16,6 +16,7 @@ changed. ghOSt is not a fork, does not track handtop, and does not depend on it 
 ### 2. What has been done
 
 - The build now reliably gets through kernel staging, rootfs bootstrap, overlay application, and in-chroot configuration.
+- The boot payload is extracted from the official ROCKNIX release image, not built. The real image layout, confirmed in CI, is: p1 = FAT (2 GiB) holding `KERNEL`, `device_trees/`, `overlays/`, `extlinux/`, `SYSTEM` and `SYSTEM.md5`; p2 = a 32 MiB ext4 that is *not* the root filesystem; the root filesystem is the `SYSTEM` squashfs, with modules and firmware under `usr/lib`. U-Boot is not a file at all — it lives in the raw sectors from 8 KiB that the boot ROM reads. `ghOSt` renames the kernel to `Image` and keeps ROCKNIX's U-Boot bytes, so the boot chain that boots on hardware is preserved byte for byte.
 - The earlier cached-rootfs failures were fixed in the build scripts:
   - broken git clone wrapper
   - stale DNS state in resumed rootfs builds

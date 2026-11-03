@@ -630,9 +630,10 @@ fi
 
 # =============================================================================
 # KERNEL MODULES
-# kernel/build-rocknix.sh stages modules into build/kernel/rootfs-overlay,
-# which build.sh rsyncs into /lib/modules. Index them so modprobe works, and
-# say so loudly when they are absent (no Wi-Fi, BT, USB, SDR drivers).
+# The boot-payload stage (kernel/fetch-rocknix-boot.sh, or build-rocknix.sh for
+# the source build) stages modules into build/kernel/rootfs-overlay, which
+# build.sh rsyncs into /lib/modules. Index them so modprobe works, and say so
+# loudly when they are absent (no Wi-Fi, BT, USB, SDR drivers).
 # =============================================================================
 if command -v depmod >/dev/null 2>&1; then
     module_trees=0

@@ -56,6 +56,8 @@ grep -q 'findmnt' $EXPAND && grep -q 'growpart' $EXPAND \
 grep -qE 'SWAP_PART|mkswap|swapoff' $EXPAND \
     && bad "expander still manipulates a swap partition" || ok "expander leaves swap alone"
 grep -q 'resize2fs' $EXPAND && ok "expander resizes the filesystem" || bad "no resize2fs"
+grep -q 'cloud-guest-utils' rootfs/build-rootfs.sh \
+    && ok "growpart (cloud-guest-utils) is installed" || bad "growpart missing from the rootfs"
 grep -q 'rm ' $EXPAND && bad "expander deletes partitions" || ok "expander never deletes a partition"
 
 

@@ -636,7 +636,7 @@ install_base() {
         firmware-realtek firmware-misc-nonfree \
         zram-tools \
         lz4 zstd \
-        e2fsprogs dosfstools parted \
+        e2fsprogs dosfstools parted cloud-guest-utils \
         util-linux procps \
         libpam-systemd \
         policykit-1 \

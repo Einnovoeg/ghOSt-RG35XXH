@@ -99,6 +99,14 @@ for f in flash_dd_with_gpt.sh flash_dd_with_gpt.MacOS.sh; do
     grep -q 'img\.xz' "$f" && ok "$f accepts .img.xz" || bad "$f rejects .img.xz"
 done
 
+# a test file that run-all never calls is a test that never protects anything
+for t in tests/*-test.sh; do
+    [[ -e "$t" ]] || continue
+    name="$(basename "$t")"
+    grep -q -- "$name" tests/run-all.sh \
+        && ok "$name runs in the suite" || bad "$name is not wired into run-all.sh"
+done
+
 # passwordless root in any stage would override the restricted sudo list
 grep -rq 'NOPASSWD: ALL' rootfs/ overlay/ 2>/dev/null \
     && bad "a build stage grants NOPASSWD: ALL" || ok "no passwordless root rule"

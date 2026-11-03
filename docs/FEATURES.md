@@ -160,6 +160,11 @@ Status values:
 
 ## How this list was checked
 
+- Nine suites in `tests/run-all.sh` cover the release extractor, the image packer,
+  panel rules, launcher shape, the Wi-Fi import, power profiles, Python
+  dependencies, systemd units and static consistency; `static-checks.sh` also
+  fails if a test file is not wired into the runner.
+
 - Every launcher entry (90) was resolved: the program it runs is either installed by a
   build stage, shipped in `overlay/`, or hidden by a `requires` guard.
 - Every systemd unit in `overlay/` and every unit `configure.sh` writes has an

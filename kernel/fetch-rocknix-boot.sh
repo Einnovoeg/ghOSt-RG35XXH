@@ -125,12 +125,14 @@ log "boot partition entries copied: $copied"
 ROOT_PART="$WORK/root.part"
 log "extracting the rootfs partition ($(( ROOT_SIZE * 512 / 1024 / 1024 ))MiB) to read modules and U-Boot"
 dd if="$IMG" of="$ROOT_PART" bs=512 skip=$(( ROOT_OFF / 512 )) count="$ROOT_SIZE" status=none
-mkdir -p "$WORK/root/usr/share/bootloader" "$WORK/root/lib/modules" "$WORK/root/lib/firmware"
+# debugfs rdump copies the directory *itself* into the destination, so dumping
+# /lib/modules into $WORK/root/lib/modules would give lib/modules/modules/...
+# Instead every path is dumped into one flat holding area and read from there.
+DUMP="$WORK/rdump"
+mkdir -p "$DUMP"
 for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
-    dest="$WORK/root${p}"
-    mkdir -p "$dest"
-    debugfs -R "rdump ${p} ${dest}" "$ROOT_PART" >/dev/null 2>&1 || true
-    log "rootfs ${p}: $(find "$dest" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
+    debugfs -R "rdump ${p} ${DUMP}" "$ROOT_PART" >/dev/null 2>&1 || true
+    log "rootfs ${p}: $(find "$DUMP/$(basename "$p")" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
 done
 
 # --- find the pieces --------------------------------------------------------
@@ -138,18 +140,18 @@ find_first() { # $1... = search roots, rest handled by caller predicate
     find "$@" -maxdepth 4 2>/dev/null | head -1
 }
 
-IMAGE_SRC="$(find "$WORK/boot" "$WORK/root/usr/share/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
+IMAGE_SRC="$(find "$WORK/boot" "$DUMP/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
 [[ -n "$IMAGE_SRC" ]] || error "no kernel Image in the boot payload (boot listing: $(head -5 "$WORK/boot-listing.txt" | tr '\n' ' '))"
 
 # bash 3.2 (macOS /bin/bash) has no mapfile, so build the list with a read loop
 DTBS=()
 while IFS= read -r d; do DTBS+=("$d"); done < <(
-    find "$WORK/boot" "$WORK/root/usr/share/bootloader" -maxdepth 4 \
+    find "$WORK/boot" "$DUMP/bootloader" -maxdepth 4 \
          \( -name '*rg35xx*.dtb' -o -name '*h700*.dtb' \) 2>/dev/null | sort -u)
 (( ${#DTBS[@]} )) || error "no device trees in the boot payload"
 
-UBOOT_SRC="$(find "$WORK/root/usr/share/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
-[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$WORK/root/usr/share/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1)"
+UBOOT_SRC="$(find "$DUMP/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
+[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$DUMP/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1)"
 [[ -n "$UBOOT_SRC" ]] || error "no U-Boot SPL in /usr/share/bootloader"
 
 # --- stage ------------------------------------------------------------------
@@ -182,8 +184,8 @@ while IFS= read -r m; do
     rsync -a "$m/" "$OVERLAY/lib/modules/$ver/"
     log "modules: $ver"
     mods=$(( mods + 1 ))
-done < <(find "$WORK/root/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
-for f in "$WORK/root/lib/firmware" "$WORK/root/usr/lib/firmware"; do
+done < <(find "$DUMP/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+for f in "$DUMP/firmware"; do
     [[ -d "$f" ]] || continue
     rsync -a "$f/" "$OVERLAY/lib/firmware/"
     fw=$(( fw + 1 ))

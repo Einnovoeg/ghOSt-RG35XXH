@@ -108,6 +108,8 @@ req=""; prev=""
 for a in "$@"; do [ "$prev" = "-R" ] && req="$a"; prev="$a"; done
 src=$(printf '%s' "$req" | awk '{print $2}')
 dest=$(printf '%s' "$req" | awk '{print $3}')
+# real rdump copies the directory itself into dest: dest/<basename>/...
+dest="$dest/$(basename "$src")"
 mkdir -p "$dest"
 case "$src" in
   /usr/share/bootloader) printf 'UBOOT-SPL' > "$dest/H700_DDR4_u-boot-sunxi-with-spl.bin" ;;

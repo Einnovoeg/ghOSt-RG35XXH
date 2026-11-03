@@ -4,7 +4,7 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fail=0
 
-for suite in static-checks.sh units-test.sh boot-fetch-test.sh pack-image-test.sh panel-test.sh launcher-test.sh wifi-import-test.sh power-test.sh; do
+for suite in static-checks.sh units-test.sh boot-fetch-test.sh pack-image-test.sh panel-test.sh launcher-test.sh wifi-import-test.sh power-test.sh python-deps-test.sh; do
     echo "══════════════════════════════════════════"
     echo "  $suite"
     echo "══════════════════════════════════════════"

@@ -771,7 +771,8 @@ install_gui() {
         fonts-terminus \
         xdg-user-dirs \
         libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev \
-        python3-sdl2 python3-evdev \
+        python3-sdl2 python3-evdev python3-psutil \
+        python3-pil \
         mangohud \
         gamescope || warn "Some GUI packages unavailable, continuing..."
 

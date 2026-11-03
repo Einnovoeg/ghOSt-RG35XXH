@@ -49,6 +49,16 @@ for tool in mcopy sfdisk mkimage mkfs.vfat mkfs.ext4 e2fsck; do
 done
 ok "packer tool requirements"
 
+echo "-- root expansion matches the shipped MBR layout"
+EXPAND=overlay/usr/local/bin/ghost-expand-fs.sh
+grep -q 'findmnt' $EXPAND && grep -q 'growpart' $EXPAND \
+    && ok "expander derives disk and grows partition" || bad "expander not layout-agnostic"
+grep -qE 'SWAP_PART|mkswap|swapoff' $EXPAND \
+    && bad "expander still manipulates a swap partition" || ok "expander leaves swap alone"
+grep -q 'resize2fs' $EXPAND && ok "expander resizes the filesystem" || bad "no resize2fs"
+grep -q 'rm ' $EXPAND && bad "expander deletes partitions" || ok "expander never deletes a partition"
+
+
 echo "-- panel service wiring"
 grep -q 'ghost-panel.service' overlay/opt/ghost/scripts/configure.sh \
     && ok "ghost-panel.service enabled" || bad "ghost-panel.service not enabled"

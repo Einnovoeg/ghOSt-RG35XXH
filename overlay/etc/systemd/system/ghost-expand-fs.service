@@ -1,10 +1,10 @@
 [Unit]
-Description=ghOSt First Boot Filesystem Expansion
-# Run very early — before filesystems are fully mounted
-# Must run before firstboot.service
-DefaultDependencies=no
-Before=local-fs-pre.target firstboot.service sysinit.target
+Description=ghOSt first-boot root filesystem expansion
+# / must be mounted before this can run, and it must finish before firstboot
+# asks the user anything. DefaultDependencies stays on: the old
+# Before=local-fs-pre.target/After=local-fs.target pair was an ordering cycle.
 After=local-fs.target
+Before=firstboot.service
 ConditionPathExists=!/var/lib/ghost/.fs_expanded
 
 [Service]
@@ -13,8 +13,7 @@ ExecStart=/usr/local/bin/ghost-expand-fs.sh
 RemainAfterExit=yes
 StandardOutput=journal+console
 StandardError=journal+console
-# Allow time for reboot at end of script
-TimeoutStartSec=120
+TimeoutStartSec=180
 
 [Install]
-WantedBy=local-fs-pre.target
+WantedBy=multi-user.target

@@ -452,7 +452,7 @@ EOF
     # in case overlay was applied before these units existed in a cached rootfs)
     systemctl enable joy2mouse.service 2>/dev/null || true
     systemctl enable wifi-watchdog.service 2>/dev/null || true
-    systemctl enable expand-rootfs.service 2>/dev/null || true
+    # ghost-expand-fs.service is the single expander (enabled unconditionally below)
     systemctl enable usb-mtp.service 2>/dev/null || true
     systemctl enable ghost-panel.service 2>/dev/null || true
     systemctl enable ghost-wifi-import.service 2>/dev/null || true

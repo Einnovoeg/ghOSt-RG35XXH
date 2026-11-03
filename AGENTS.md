@@ -46,6 +46,7 @@ ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal
 - The macOS flash helper had a zsh bug (`[[ $x =~ '^disk[0-9]+$' ]]` with a quoted pattern matches literally), so disk selection could never succeed; fixed.
 - CI (`static` job) now installs `mtools`/`fdisk`/`e2fsprogs` — without them the loop-free packer cannot run in Actions — and gates the long build on the test suite in `tests/`.
 - `kernel/build-rocknix.sh` patches both DTBs (regular and rev6-panel) and warns when the kernel tree has no rev6 DTB.
+- First-boot expansion was rewritten for the MBR layout. It used to assume the legacy GPT layout (p3 root, p4 swap) and would `parted rm` partition 2 — the root filesystem — on the image this repo actually ships. `ghost-expand-fs.sh` now derives the disk from `findmnt /`, grows only the partition holding `/` (`growpart`, `parted` fallback) and resizes ext4 in place; the duplicate `expand-rootfs.service` that hardcoded `/dev/mmcblk0` is deleted, so the other SD slot works too.
 
 ### 3. Steps that need to be taken next
 

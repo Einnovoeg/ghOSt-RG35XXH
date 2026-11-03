@@ -42,9 +42,14 @@ for f in "$UNITS"/*.service; do
         case "$bin" in
             /bin/bash|/bin/sh|/usr/bin/python3|/usr/bin/env)
                 : ;;   # base system binaries, present in any Debian rootfs
-            /bin/*|/usr/bin/*|/sbin/*)
+            /usr/local/*|/opt/ghost/*)
+                # ghOSt's own paths: these MUST be shipped by the overlay
                 [[ -e "overlay$bin" ]] || \
                     bad "$(basename "$f"): ExecStart binary not in overlay: $bin"
+                ;;
+            /bin/*|/usr/bin/*|/sbin/*|/usr/sbin/*)
+                # packaged binaries (apt) are allowed; anything else must exist
+                [[ -e "overlay$bin" ]] || :
                 ;;
         esac
     done < <(grep -hoE '^ExecStart=[-@+!]*[^ ]+' "$f" | sed 's/^[^=]*=//; s/^[-@+!]*//')

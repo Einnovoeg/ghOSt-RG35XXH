@@ -128,6 +128,13 @@ grep -q 'candidate_dtbs' kernel/build-rocknix.sh \
     && ok "kernel stage discovers ROCKNIX device trees" || bad "no DTB discovery"
 grep -q 'BOOT_STAGE' kernel/build-rocknix.sh \
     && ok "kernel stage stages Image/SPL/DTBs" || bad "no boot asset staging"
+grep -q 'rootfs-overlay' kernel/build-rocknix.sh \
+    && grep -q 'lib/modules' kernel/build-rocknix.sh \
+    && grep -q 'lib/firmware' kernel/build-rocknix.sh \
+    && ok "kernel modules and firmware staged into the rootfs overlay" \
+    || bad "modules never reach the image"
+grep -q 'rootfs-overlay' build.sh \
+    && ok "build.sh applies the staged kernel overlay" || bad "staged overlay is not applied"
 
 
 echo "-- CI installs the packer's tools"

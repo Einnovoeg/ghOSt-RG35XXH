@@ -171,6 +171,33 @@ stage_boot_assets() {
         warn "u-boot SPL not found under install_pkg (packer will refuse to build)"
     fi
 
+    # build.sh apply_overlay rsyncs $KERNEL_BUILD_DIR/rootfs-overlay into the
+    # rootfs. Without this the image boots with no kernel modules or firmware,
+    # so Wi-Fi, Bluetooth, USB, SDR and the joypad bridge are all dead.
+    local overlay="$KERNEL_BUILD_DIR/rootfs-overlay" mods=0 fw=0 src
+    mkdir -p "$overlay/lib/modules" "$overlay/lib/firmware"
+    while IFS= read -r src; do
+        [[ -d "$src" ]] || continue
+        rsync -a "$src/" "$overlay/lib/modules/"
+        mods=$((mods + 1))
+    done < <(ls -d "$ROCKNIX_BUILD"/install_pkg/linux-*/lib/modules/*/ 2>/dev/null || true)
+    for src in "$ROCKNIX_BUILD"/install_pkg/*/lib/firmware \
+               "$ROCKNIX_BUILD"/install_pkg/*/usr/lib/firmware; do
+        [[ -d "$src" ]] || continue
+        rsync -a "$src/" "$overlay/lib/firmware/"
+        fw=$((fw + 1))
+    done
+    if (( mods > 0 )); then
+        log "Staged $mods kernel module tree(s) from install_pkg into $overlay/lib/modules"
+    else
+        warn "no kernel modules found under install_pkg — the image would boot without drivers"
+    fi
+    if (( fw > 0 )); then
+        log "Staged firmware from $fw tree(s) into $overlay/lib/firmware"
+    else
+        warn "no firmware found under install_pkg"
+    fi
+
     log "Staged boot assets in $BOOT_STAGE:"
     ls -lh "$BOOT_STAGE" || true
     if [[ -z "$REV6_DTB" ]]; then

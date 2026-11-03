@@ -56,10 +56,12 @@ SFDISK
     dd if="$H/root.ext4" of="$H/release.img" bs=512 seek=34816 conv=notrunc status=none
     gzip -c "$H/release.img" > "$H/release.img.gz"
     SRC="$H/release.img.gz"
+    SHA="$(sha256sum "$SRC" | awk '{print $1}')"
 else
     echo "-- mode: stubs (no Linux mkfs/mtools/debugfs on this host)"
     mkdir -p "$H/bin"
     SRC="$H/release.img"; : > "$SRC"
+    SHA="$(printf '0%.0s' {1..64})"
 
     cat > "$H/bin/sha256sum" <<'EOS'
 #!/bin/sh
@@ -114,7 +116,7 @@ EOS
 fi
 
 BUILD="$H/build"
-if ! ROCKNIX_IMAGE_FILE_PATH="$SRC" ROCKNIX_IMAGE_SHA256="deadbeef" BUILD_DIR="$BUILD" \
+if ! ROCKNIX_IMAGE_FILE_PATH="$SRC" ROCKNIX_IMAGE_SHA256="$SHA" BUILD_DIR="$BUILD" \
      bash kernel/fetch-rocknix-boot.sh > "$H/out.log" 2>&1; then
     bad "extractor failed"; tail -20 "$H/out.log"; exit 1
 fi

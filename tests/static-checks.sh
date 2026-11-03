@@ -58,6 +58,12 @@ grep -qE 'SWAP_PART|mkswap|swapoff' $EXPAND \
 grep -q 'resize2fs' $EXPAND && ok "expander resizes the filesystem" || bad "no resize2fs"
 grep -q 'cloud-guest-utils' rootfs/build-rootfs.sh \
     && ok "growpart (cloud-guest-utils) is installed" || bad "growpart missing from the rootfs"
+
+echo "-- arm64 chroots work without binfmt"
+for f in rootfs/build-ui-xfce.sh build.sh; do
+    grep -q 'qemu-aarch64-static' "$f" \
+        && ok "$(basename "$f") uses the static qemu" || bad "$(basename "$f") chroots without qemu"
+done
 grep -q 'rm ' $EXPAND && bad "expander deletes partitions" || ok "expander never deletes a partition"
 
 

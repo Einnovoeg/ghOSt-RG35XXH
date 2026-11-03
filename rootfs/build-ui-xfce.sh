@@ -21,9 +21,16 @@ TARGET_USER="${TARGET_USER:-${GHOST_USER:-ghost}}"
 run_chroot() {
     for m in proc sys dev dev/pts; do mount --bind /$m "$ROOTFS/$m" 2>/dev/null || true; done
     cp /etc/resolv.conf "$ROOTFS/etc/resolv.conf" 2>/dev/null || true
+    # Prefer the static qemu: bare chroot of an arm64 rootfs only works when
+    # binfmt_misc happens to be registered, which GitHub runners often lack.
+    if [[ ! -f "$ROOTFS/usr/bin/qemu-aarch64-static" ]]; then
+        cp /usr/bin/qemu-aarch64-static "$ROOTFS/usr/bin/" 2>/dev/null || true
+    fi
+    local runner=()
+    [[ -f "$ROOTFS/usr/bin/qemu-aarch64-static" ]] && runner=(/usr/bin/qemu-aarch64-static)
     # shellcheck disable=SC2064
     trap 'for m in dev/pts dev sys proc; do umount -l "$ROOTFS/$m" 2>/dev/null || true; done' EXIT
-    DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" /bin/bash -e -c "$1"
+    DEBIAN_FRONTEND=noninteractive chroot "$ROOTFS" "${runner[@]}" /bin/bash -e -c "$1"
     for m in dev/pts dev sys proc; do umount -l "$ROOTFS/$m" 2>/dev/null || true; done
     trap - EXIT
 }

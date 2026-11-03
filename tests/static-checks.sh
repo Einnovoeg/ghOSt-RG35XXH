@@ -99,6 +99,11 @@ for f in flash_dd_with_gpt.sh flash_dd_with_gpt.MacOS.sh; do
     grep -q 'img\.xz' "$f" && ok "$f accepts .img.xz" || bad "$f rejects .img.xz"
 done
 
+# a kernel with an embedded initramfs boots to busybox, not to ghOSt
+grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
+    && ok "extractor detects an embedded initramfs" \
+    || bad "embedded initramfs would bypass the rootfs unnoticed"
+
 # firstboot.sh launches the interactive setup; it has to be installed too
 grep -q 'firstboot-interactive.sh' firstboot/firstboot.sh \
     && grep -q 'cp .*firstboot-interactive.sh' build.sh \

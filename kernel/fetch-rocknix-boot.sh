@@ -222,6 +222,17 @@ if [[ -n "$UBOOT_SRC" ]]; then
     cp "$UBOOT_SRC" "$BOOT_STAGE/u-boot-sunxi-with-spl.bin"
 fi
 log "kernel: $(basename "$IMAGE_SRC") ($(du -h "$IMAGE_SRC" | cut -f1)), u-boot: ${UBOOT_SRC:+$(basename "$UBOOT_SRC")}"
+# ROCKNIX builds its kernel with CONFIG_INITRAMFS_SOURCE, so the released Image
+# can carry a cpio archive that looks for /flash and /storage and drops to a
+# busybox shell even when the Debian rootfs is mounted right underneath it.
+# Detect it here, because a kernel like that boots to `#`, not to ghOSt.
+if grep -aq 'TRAILER!!!' "$BOOT_STAGE/Image"; then
+    warn "kernel carries an embedded initramfs (cpio trailer found in Image)"
+    warn "  it will look for ROCKNIX's /flash + SYSTEM rootfs, not ghOSt's Debian rootfs"
+    warn "  rebuild it without one: GHOST_BOOT_SOURCE=source uses"
+    warn "  patches/kernel/configure-empty-initramfs.sh to empty INITRAMFS_SOURCE"
+    echo "embedded-initramfs" > "$BOOT_STAGE/EMBEDDED-INITRAMFS"
+fi
 
 regular=""; rev6=""
 for d in "${DTBS[@]}"; do

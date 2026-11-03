@@ -24,9 +24,25 @@ from datetime import datetime
 CONFIG_DIR = Path.home() / ".config" / "ghost" / "hey"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 HISTORY_DIR = Path.home() / ".local" / "share" / "ghost" / "conversations"
-WHISPER_BIN = "/opt/ghost/whisper.cpp/main"
+def _first_existing(*candidates):
+    """First candidate that exists, else the last one.
+
+    whisper.cpp has renamed its CLI between releases (main -> build/bin/whisper-cli),
+    so a hardcoded path makes voice input fail on an image that built fine.
+    """
+    import shutil
+    for cand in candidates:
+        found = cand if os.path.isabs(cand) else shutil.which(cand)
+        if found and Path(found).exists():
+            return found
+    return candidates[-1]
+
+
+WHISPER_BIN = _first_existing("/opt/ghost/whisper.cpp/build/bin/whisper-cli",
+                              "/opt/ghost/whisper.cpp/main",
+                              "/usr/local/bin/whisper", "whisper")
 WHISPER_MODEL = "/opt/ghost/whisper.cpp/models/ggml-tiny.en.bin"
-PIPER_BIN = "/opt/ghost/piper/piper"
+PIPER_BIN = _first_existing("/opt/ghost/piper/piper", "piper")
 PIPER_VOICE = "/opt/ghost/piper/voices/en_US-lessac-medium.onnx"
 ARECORD_DEVICE = "default"
 APLAY_DEVICE = "default"

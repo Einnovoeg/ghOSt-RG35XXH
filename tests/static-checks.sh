@@ -125,6 +125,13 @@ for unit in overlay/etc/systemd/system/*.service; do
 done
 (( unit_bad )) || ok "every overlay ExecStart target is executable"
 
+# voice input must find the whisper.cpp CLI the build actually produces
+grep -q 'whisper-cli' hey/hey.py \
+    && ok "hey resolves the current whisper.cpp CLI" \
+    || bad "hey hardcodes whisper.cpp/main, which newer builds do not create"
+grep -q '/opt/ghost/piper/piper' rootfs/build-rootfs.sh \
+    && ok "piper is installed where hey looks for it" || bad "piper path mismatch"
+
 # stealth mode must find whichever mGBA build the image installed
 grep -q 'pick_emulator' stealthd/stealthd.py \
     && grep -q 'mgba-qt' stealthd/stealthd.py \

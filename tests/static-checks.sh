@@ -99,6 +99,13 @@ for f in flash_dd_with_gpt.sh flash_dd_with_gpt.MacOS.sh; do
     grep -q 'img\.xz' "$f" && ok "$f accepts .img.xz" || bad "$f rejects .img.xz"
 done
 
+# launcher and dos-library call dosbox-x; the build must install it or shim it
+grep -q 'dosbox-x' rootfs/build-rootfs.sh \
+    && ok "DOS entries can find dosbox-x" || bad "launcher needs dosbox-x, build provides none"
+grep -q '/usr/local/bin/dosbox-x' rootfs/build-rootfs.sh \
+    && ok "dosbox-x shim provided when only dosbox is packaged" || bad "no dosbox-x fallback"
+
+
 echo "-- licence compliance"
 [[ -f LICENSE ]] && grep -q 'MIT License' LICENSE && ok "LICENSE present (MIT)" || bad "LICENSE missing"
 [[ -f NOTICE ]] && ok "NOTICE present" || bad "NOTICE missing"

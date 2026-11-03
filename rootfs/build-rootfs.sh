@@ -1375,9 +1375,20 @@ install_gaming() {
 
     if [[ "$INCLUDE_DOSBOX" == "true" ]]; then
         log "Installing DOS compatibility layer..."
-        # DOSBox-X no longer publishes a Linux ARM64 .deb asset. Use the Debian
-        # DOSBox package on Bookworm ARM64 so optional DOS tooling still lands.
-        $APT dosbox || warn "DOSBox install failed"
+        # DOSBox-X publishes no Linux ARM64 .deb, so take whichever package exists
+        # and then provide the name the launcher and dos-library actually call.
+        $APT dosbox-x || $APT dosbox || warn "DOSBox install failed"
+        if [[ ! -e "$ROOTFS_DIR/usr/bin/dosbox-x" && ! -e "$ROOTFS_DIR/usr/local/bin/dosbox-x" ]] \
+           && [[ -e "$ROOTFS_DIR/usr/bin/dosbox" ]]; then
+            log "No DOSBox-X package for ARM64; adding a dosbox-x shim over DOSBox"
+            cat > "$ROOTFS_DIR/usr/local/bin/dosbox-x" <<'DOSBOX_SHIM'
+#!/bin/sh
+# The launcher and dos-library invoke `dosbox-x`. Classic DOSBox accepts the same
+# -conf/-c options, so forward to it when DOSBox-X is not packaged for this arch.
+exec dosbox "$@"
+DOSBOX_SHIM
+            chmod +x "$ROOTFS_DIR/usr/local/bin/dosbox-x"
+        fi
     fi
 
     log "Gaming layer installed"

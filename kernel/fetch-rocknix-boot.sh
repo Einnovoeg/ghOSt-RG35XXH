@@ -148,7 +148,7 @@ if [[ -n "$ROOT_OFF" ]]; then
             rm -rf "$WORK/root$p"
             mv "$src" "$WORK/root$p"
         fi
-        n="$(find "$WORK/root$p" -type f 2>/dev/null | wc -l | tr -d ' ')"
+        n="$(find "$WORK/root$p" -type f 2>/dev/null | wc -l | tr -d ' ' || true)"
         log "ext4 ${p}: ${n} file(s)"
         (( n > 0 )) || warn "  debugfs: $(head -2 "$WORK/dbg.log" | tr '\n' ' ')"
     done
@@ -227,7 +227,7 @@ while IFS= read -r m; do
     [[ -d "$m" ]] || continue
     ver="$(basename "$m")"
     rsync -a "$m/" "$OVERLAY/lib/modules/$ver/"
-    log "modules: $ver ($(find "$m" -type f | wc -l | tr -d ' ') files)"
+    log "modules: $ver ($(find "$m" -type f 2>/dev/null | wc -l | tr -d ' ' || true) files)"
     mods=$(( mods + 1 ))
 done < <(find "$ROOT_SRC/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
 for f in "$ROOT_SRC/lib/firmware" "$ROOT_SRC/usr/lib/firmware"; do

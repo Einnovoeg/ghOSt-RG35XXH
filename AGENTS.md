@@ -6,12 +6,6 @@
 
 ghOSt is a custom Debian Trixie ARM64 image for the Anbernic RG35XXH. The goal is to turn the device into a portable security, RF, wireless, and privacy workstation with a controller-friendly launcher, stealth mode, and a curated set of tools that still fit within the hardware limits of the H700 platform.
 
-ghOSt is independent of [junsulee119/handtop](https://github.com/junsulee119/handtop).
-handtop is a separate Debian build for the same hardware that works on real units and
-is therefore used as a reference: a few proven techniques (loop-free image assembly,
-screen-panel selection on PE6, boot-partition provisioning files) were adapted from it
-and are credited in `NOTICE`, `LICENSES/` and each file's header, with what ghOSt
-changed. ghOSt is not a fork, does not track handtop, and does not depend on it to build.
 
 ### 2. What has been done
 
@@ -34,7 +28,7 @@ changed. ghOSt is not a fork, does not track handtop, and does not depend on it 
   - isolated loop-device and device-mapper repros succeed
   - the full 20GB partition layout also formats successfully in isolation
   - this means the current `mkfs.ext4: Operation not permitted while trying to determine filesystem size` failure looks transient in the live build path, not like a fundamental Docker/macOS incompatibility
-- Image assembly no longer depends on loop devices, device-mapper or mounts, which is what failed inside Docker Desktop on macOS. `image/pack-image-rocknix.sh` was rewritten on the approach used by junsulee119/handtop (`build/10-image.sh`):
+- Image assembly no longer depends on loop devices, device-mapper or mounts, which is what failed inside Docker Desktop on macOS. `image/pack-image-rocknix.sh` assembles the image without loops or mounts:
   - FAT boot partition built as a file with `mkfs.vfat -C` + mtools `mcopy`
   - ext4 root partition built as a file with `mkfs.ext4 -d "$ROOTFS"` (populated directly from the rootfs directory, no mount)
   - MBR written with `sfdisk` (fixed disk id), then u-boot SPL, boot.vfat and root.ext4 `dd`'d in at 8 KiB / 16 MiB / 272 MiB
@@ -46,7 +40,7 @@ changed. ghOSt is not a fork, does not track handtop, and does not depend on it 
   - sizes the image from the actual rootfs (`IMAGE_SIZE_GB` is now a floor, not a cap), and emits `.img.xz` + `SHA256SUMS` (+ `.bmap` when `bmaptool` exists)
 - `mtools` added to the Dockerfile; `ROOTFS_DIR` is env-overridable; `IMAGE_SIZE_GB` is no longer pinned in `VERSIONS` (config.sh owns it).
 - Verified with a stubbed harness (`build/pack-selftest.sh`, not part of the build): partition offsets, labels, u-boot offset, boot.scr PARTUUID rewrite and rootfs sanitisation all assert clean. A real Docker run is still outstanding — see below.
-- Two more behaviours proven by handtop were adapted, both aimed at a unit you cannot see:
+- Two behaviours aimed at a unit you cannot see:
   - **panel safety**: the image now ships `dtb-regular.img` and `dtb-rev6.img`, `boot.cmd` loads `dtb.img`, and `ghost-panel.service` reads board pin PE6 each boot (via GPIO uAPI v2), swaps `dtb.img` when the unit has the other panel, and restarts once. Loop-guarded, logged to `logs/panel.txt`, no-op when the file was edited by hand. `panel.txt` on the boot partition overrides detection.
   - **pre-boot provisioning**: `ghost-wifi-import.service` imports `wifi.txt` from the FAT partition into NetworkManager and blanks the password; `panel.txt`, `wifi.txt` and `README.txt` are staged with CRLF so they are editable from Windows.
   - files: `overlay/usr/local/sbin/ghost-panel`, `overlay/usr/local/sbin/ghost-wifi-import`, the two matching units, `image/bootfiles/*`, and `patches/uboot/boot.cmd` (now loads `dtb.img`).
@@ -80,7 +74,7 @@ changed. ghOSt is not a fork, does not track handtop, and does not depend on it 
 - `overlay/opt/ghost/themes/generate-wallpaper.py`
 - `kernel/build-rocknix.sh` (DTB discovery under ROCKNIX's boot payload, DDR-aware U-Boot, staged boot assets, module + firmware staging)
 - `overlay/usr/local/bin/ghost-expand-fs.sh` (rewritten for the MBR layout)
-- `overlay/usr/local/sbin/ghost-panel`, `overlay/usr/local/sbin/ghost-wifi-import` (ported from handtop, MIT notices kept)
+- `overlay/usr/local/sbin/ghost-panel`, `overlay/usr/local/sbin/ghost-wifi-import` (MIT notices kept in the file headers)
 - `overlay/etc/systemd/system/{ghost-panel,ghost-wifi-import}.service`; `expand-rootfs.service` deleted
 - `image/bootfiles/{wifi.txt,panel.txt,README.txt}`, `docs/panel.md`
 - `tests/` (static, unit and packer suites; CI `static` job gates the build)

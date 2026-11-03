@@ -22,24 +22,12 @@ supplies everything above it (rootfs, tools, launcher, stealth mode, UI).
 `GHOST_BOOT_SOURCE=source` builds ROCKNIX's kernel tree in a container instead,
 for experiments; it is not the supported path.
 
-## Provenance: ghOSt is the project, handtop is a reference
-
-ghOSt is an independent project. It is **not** a fork of, and does not track,
-[handtop](https://github.com/junsulee119/handtop). handtop is a separate, working
-Debian build for the same Anbernic RG35XXH hardware, and it is used here as a
-reference: where ghOSt had a problem that handtop had already solved on real units —
-loop-free image assembly, screen-panel selection, provisioning files on the boot
-partition — the technique was adapted and credited instead of reinvented.
-
-Everything else is ghOSt's own: the toolset, launcher, stealth mode, rootfs stages,
-UI, boot layout and packaging.
-
 ## Licence
 
-MIT — see `LICENSE`. A few files adapt code from handtop (MIT); the image also ships
-ROCKNIX/KNULLI builds (GPL-2.0) and tools cloned at build time. `NOTICE` lists every
-source, what was used and under which licence, and `LICENSES/` keeps the upstream
-notices verbatim.
+MIT — see `LICENSE`. A few files carry MIT notices from other projects; the image
+also ships ROCKNIX builds (GPL-2.0) and tools cloned at build time. `NOTICE` lists
+every source, what was used and under which licence, and `LICENSES/` keeps the
+upstream notices verbatim.
 
 ## Build (local)
 

@@ -158,7 +158,7 @@ The first-boot flow focuses on operator setup:
 
 ## Partition Layout (rocknix, bootable)
 
-Default image layout (`IMAGE_SIZE_GB=12`, expands to fill SD on first boot via `expand-rootfs.service`):
+Default image layout (`IMAGE_SIZE_GB=12`, expands to fill SD on first boot via `ghost-expand-fs.service`):
 
 ```text
 mmcblk0p1   FAT32     256MB   BOOT (Image, DTB, boot.scr/boot.cmd)

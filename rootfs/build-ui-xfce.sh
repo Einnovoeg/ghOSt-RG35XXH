@@ -93,7 +93,7 @@ chmod +x "$ROOTFS"/usr/local/bin/joy2mouse "$ROOTFS"/usr/local/bin/play480 \
 run_chroot "
 systemctl enable joy2mouse.service || true
 systemctl enable wifi-watchdog.service || true
-systemctl enable expand-rootfs.service || true
+# ghost-expand-fs.service (overlay) is the single first-boot expander
 # MTP on by default (port 1); mass-storage left disabled (conflicts)
 systemctl enable usb-mtp.service || true
 systemctl disable usb-massstorage.service || true
@@ -104,6 +104,7 @@ LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
 LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
 proc           /proc    proc   defaults                             0 0
 tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0
+tmpfs          /var/tmp tmpfs  defaults,nosuid,nodev,size=64M       0 0
 EOF
 
 # Persistent journal

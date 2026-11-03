@@ -274,7 +274,9 @@ configure_chroot() {
     mount -t tmpfs tmpfs "$ROOTFS_DIR/tmp"
 
     # Run chroot configuration script
+    # Pass BOOT_FLOW in so configure.sh writes the fstab for the layout we build.
     chroot "$ROOTFS_DIR" /usr/bin/qemu-aarch64-static \
+        /usr/bin/env "BOOT_FLOW=${BOOT_FLOW:-rocknix}" \
         /bin/bash /opt/ghost/scripts/configure.sh || chroot_status=$?
 
     cleanup_configure_chroot

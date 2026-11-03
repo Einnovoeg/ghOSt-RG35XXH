@@ -59,6 +59,17 @@ grep -q 'resize2fs' $EXPAND && ok "expander resizes the filesystem" || bad "no r
 grep -q 'rm ' $EXPAND && bad "expander deletes partitions" || ok "expander never deletes a partition"
 
 
+echo "-- fstab and module indexing"
+CONF=overlay/opt/ghost/scripts/configure.sh
+grep -q 'depmod' $CONF && ok "module index built at configure time" || bad "no depmod: modules never load"
+grep -q 'BOOT_FLOW' $CONF && ok "fstab chosen by BOOT_FLOW" || bad "fstab still guessed from lightdm"
+grep -q 'env "BOOT_FLOW' build.sh && ok "BOOT_FLOW reaches the chroot" || bad "BOOT_FLOW not passed to chroot"
+[[ "$(grep -c 'UUID=SWAP_UUID' $CONF)" == "1" ]] \
+    && ok "swap-partition fstab limited to the legacy branch" \
+    || bad "swap-partition fstab leaks into the MBR layout"
+grep -q 'LABEL=BOOT' $CONF && ok "MBR fstab uses LABELs" || bad "fstab not label based"
+
+
 echo "-- panel service wiring"
 grep -q 'ghost-panel.service' overlay/opt/ghost/scripts/configure.sh \
     && ok "ghost-panel.service enabled" || bad "ghost-panel.service not enabled"

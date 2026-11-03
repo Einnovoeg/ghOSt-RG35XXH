@@ -597,17 +597,10 @@ EOF
 # a safe default for both flows. Legacy assemble_image replaces ROOT/SWAP_UUID.
 # =============================================================================
 log "Writing fstab..."
-if [ -x /usr/sbin/lightdm ] || grep -q "LABEL=rootfs" /etc/fstab 2>/dev/null; then
-    # Rocknix MBR layout: p1 FAT BOOT, p2 ext4 rootfs (see boot.cmd root=/dev/mmcblk0p2)
-    cat > /etc/fstab << 'EOF'
-# ghOSt fstab — rocknix MBR layout (BOOT vfat + rootfs ext4, LABEL-based)
-LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
-LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
-proc           /proc    proc   defaults                             0 0
-tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0
-# zram swap handled by zramswap service (priority 100)
-EOF
-else
+# The shipped layout is MBR with LABEL=rootfs/BOOT. Only the experimental
+# BOOT_FLOW=legacy assembly still formats UUID-based partitions, so the choice
+# follows BOOT_FLOW (passed in by build.sh) instead of guessing from lightdm.
+if [ "${BOOT_FLOW:-rocknix}" = "legacy" ]; then
     cat > /etc/fstab << 'EOF'
 # ghOSt fstab — noatime + tmpfs for SD card longevity
 # UUIDs are replaced during image assembly
@@ -623,6 +616,40 @@ tmpfs           /run      tmpfs defaults,nosuid,nodev,size=32M                  
 
 # zram swap is handled by zramswap service (priority 100, hits before SD swap)
 EOF
+else
+    cat > /etc/fstab << 'EOF'
+# ghOSt fstab — rocknix MBR layout (BOOT vfat + rootfs ext4, LABEL-based)
+# No swap partition: zramswap handles swap (priority 100).
+LABEL=rootfs   /        ext4   defaults,noatime,errors=remount-ro  0 1
+LABEL=BOOT     /boot    vfat   defaults,noatime,umask=0022          0 2
+proc           /proc    proc   defaults                             0 0
+tmpfs          /tmp     tmpfs  defaults,nosuid,nodev,size=256M      0 0
+tmpfs          /var/tmp tmpfs  defaults,nosuid,nodev,size=64M       0 0
+EOF
+fi
+
+# =============================================================================
+# KERNEL MODULES
+# kernel/build-rocknix.sh stages modules into build/kernel/rootfs-overlay,
+# which build.sh rsyncs into /lib/modules. Index them so modprobe works, and
+# say so loudly when they are absent (no Wi-Fi, BT, USB, SDR drivers).
+# =============================================================================
+if command -v depmod >/dev/null 2>&1; then
+    module_trees=0
+    for kdir in /lib/modules/*/; do
+        [ -d "$kdir" ] || continue
+        kver="$(basename "$kdir")"
+        module_trees=$((module_trees + 1))
+        if [ -f "$kdir/modules.dep" ]; then
+            log "module index present for $kver"
+        else
+            log "building module index for $kver"
+            depmod -a "$kver" 2>/dev/null || warn "depmod failed for $kver"
+        fi
+    done
+    [ "$module_trees" -gt 0 ] || warn "no trees under /lib/modules — drivers will be missing"
+else
+    warn "depmod not available; module dependencies will not be indexed"
 fi
 
 # =============================================================================

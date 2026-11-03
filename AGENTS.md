@@ -54,7 +54,7 @@ ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal
    `docker compose up --build`
    Do not use `SKIP_KERNEL=true` for the verification run unless `/opt/ghost-build/boot0.img` and the other staged boot assets already exist.
 2. If `pack-image-rocknix.sh` fails, it now fails on a specific, checkable input rather than on loop setup. Confirm the three artifacts it names: the u-boot SPL under `install_pkg/u-boot-*/usr/share/bootloader/`, `<KERNEL_NAME>/arch/arm64/boot/Image`, and `dts/allwinner/$DTB_NAME`. For a test without a kernel build, point `GHOST_UBOOT_BIN`, `GHOST_KERNEL_IMAGE` and `GHOST_DTB_FILE` at files.
-3. Flash the resulting `output/ghOSt-RG35XXH-<version>-<sha>.img.xz` and confirm on hardware: u-boot loads `Image`/`dtb.img`/`boot.scr` from p1, the kernel mounts p2 by PARTUUID, and first boot runs `expand-rootfs`.
+3. Flash the resulting `output/ghOSt-RG35XXH-<version>-<sha>.img.xz` and confirm on hardware: u-boot loads `Image`/`dtb.img`/`boot.scr` from p1, the kernel mounts p2 by PARTUUID, and first boot runs `ghost-expand-fs`.
 4. Check the two ported behaviours on the unit: `journalctl -u ghost-panel` should say the DTB matches (or switch once and restart); filling `wifi.txt` on the card before boot should join the network without a keyboard.
 5. Update the release notes and README if needed, then move on to the broader repo-cleanup and licensing work.
 
@@ -312,10 +312,10 @@ First-boot root partition expander:
 ## SD Card Longeuity
 
 **tmpfs mounts (in fstab):**
-- `/tmp` — 128MB
+- `/tmp` — 256MB
 - `/var/tmp` — 64MB
-- `/var/log` — 32MB
-- `/run` — 32MB
+- `/var/log` — log2ram's own 40MB RAM buffer (rsync-based), not a plain tmpfs
+- `/run` — systemd's own tmpfs
 
 **log2ram:** 40MB RAM buffer for /var/log (rsync-based)
 **atime:** disabled via `noatime,nodiratime` in fstab

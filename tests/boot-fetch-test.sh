@@ -119,6 +119,11 @@ if ! ROCKNIX_IMAGE_FILE_PATH="$SRC" ROCKNIX_IMAGE_SHA256="deadbeef" BUILD_DIR="$
     bad "extractor failed"; tail -20 "$H/out.log"; exit 1
 fi
 ok "extractor completed"
+if (( HAVE )); then
+    # the fixture itself must be sane before blaming the extractor
+    mdir -b -i "$H/boot.fat" ::/ 2>/dev/null | sed 's/^/    fat: /'
+    sed 's/^/    log: /' "$H/out.log"
+fi
 assert_staged "$BUILD"
 
 # staging must be usable by the packer: dtb.img is the regular tree, SPL is DDR4

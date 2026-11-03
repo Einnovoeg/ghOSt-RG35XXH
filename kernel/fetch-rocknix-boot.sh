@@ -105,8 +105,21 @@ log "boot partition: p$FAT_INDEX (offset $FAT_OFF), rootfs: p$ROOT_INDEX"
 mkdir -p "$WORK/boot"
 log "reading the FAT boot partition"
 mdir -b -i "$IMG@@$FAT_OFF" ::/ > "$WORK/boot-listing.txt" 2>/dev/null || true
-mcopy -s -i "$IMG@@$FAT_OFF" ::/* "$WORK/boot/" 2>/dev/null || \
-    warn "could not copy the whole boot partition; falling back to named files"
+# Copy every entry by name. An mtools wildcard (::/* or ::*) skips top-level
+# files on some builds while still copying directories, which loses the kernel
+# image without any error, so each entry is resolved explicitly.
+copied=0
+while IFS= read -r entry; do
+    [[ -n "$entry" ]] || continue
+    if mcopy -s -o -i "$IMG@@$FAT_OFF" "::/$entry" "$WORK/boot/" 2>/dev/null; then
+        copied=$(( copied + 1 ))
+    fi
+done < <(mdir -b -i "$IMG@@$FAT_OFF" ::/ 2>/dev/null | sed 's#^::/##; s#\r$##')
+if (( copied == 0 )); then
+    mcopy -s -i "$IMG@@$FAT_OFF" "::*" "$WORK/boot/" 2>/dev/null || \
+        warn "could not copy the boot partition"
+fi
+log "boot partition entries copied: $copied"
 
 # --- pull what we need out of the ext4 rootfs -------------------------------
 ROOT_PART="$WORK/root.part"
@@ -117,6 +130,7 @@ for p in /usr/share/bootloader /lib/modules /lib/firmware /usr/lib/firmware; do
     dest="$WORK/root${p}"
     mkdir -p "$dest"
     debugfs -R "rdump ${p} ${dest}" "$ROOT_PART" >/dev/null 2>&1 || true
+    log "rootfs ${p}: $(find "$dest" -type f 2>/dev/null | wc -l | tr -d ' ') file(s)"
 done
 
 # --- find the pieces --------------------------------------------------------

@@ -1345,7 +1345,8 @@ install_gaming() {
 
     if [[ "$INCLUDE_STEALTH" == "true" ]]; then
         log "Installing mGBA (stealth mode emulator)..."
-        $APT mgba-qt || $APT mgba-sdl || \
+        # stealth mode launches the SDL build under gamescope, so prefer it
+        $APT mgba-sdl || $APT mgba-qt || \
             $CHROOT bash -c "
                 git clone --depth=1 https://github.com/mgba-emu/mgba /tmp/mgba && \
                 cd /tmp/mgba && mkdir build && cd build && \

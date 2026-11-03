@@ -7,7 +7,7 @@ ghOSt-RG35XXH stealthd — Stealth Mode Daemon
 - Cleans all traces on deactivate
 """
 
-import os, sys, time, signal, subprocess, glob, ctypes, threading, tempfile
+import os, sys, time, signal, subprocess, glob, ctypes, threading, tempfile, shutil
 from pathlib import Path
 
 # Process disguise
@@ -32,6 +32,15 @@ BTN_SELECT, BTN_START, BTN_L2 = ecodes.BTN_SELECT, ecodes.BTN_START, ecodes.BTN_
 STEALTH_COMBO    = frozenset([BTN_SELECT, BTN_START, BTN_L2])
 TMPDIR           = Path(tempfile.gettempdir()) / "ghost-stealth"
 STEALTH_ACTIVE   = TMPDIR / "active"
+
+def pick_emulator():
+    """Whichever mGBA build this image ended up with: SDL, plain, or Qt."""
+    for name in ("mgba-sdl", "mgba", "mgba-qt"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
 
 def log(msg):
     try:
@@ -105,10 +114,14 @@ class StealthMode:
                    "SDL_VIDEODRIVER": "wayland",
                    "SDL_VIDEO_WAYLAND_WINDOW_TITLE": "System Monitor"}
 
+            emulator = pick_emulator()
+            if emulator is None:
+                log("No mGBA build on PATH (mgba-sdl, mgba, mgba-qt); not activating")
+                return
             self.mgba_proc = subprocess.Popen(
                 ["gamescope", "-w", "640", "-h", "480",
                  "-W", "640", "-H", "480", "-f",
-                 "--", "mgba-sdl", "-f", rom],
+                 "--", emulator, "-f", rom],
                 env=env, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, start_new_session=True)
 

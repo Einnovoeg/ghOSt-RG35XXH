@@ -125,6 +125,14 @@ for unit in overlay/etc/systemd/system/*.service; do
 done
 (( unit_bad )) || ok "every overlay ExecStart target is executable"
 
+# stealth mode must find whichever mGBA build the image installed
+grep -q 'pick_emulator' stealthd/stealthd.py \
+    && grep -q 'mgba-qt' stealthd/stealthd.py \
+    && ok "stealth mode resolves the installed mGBA build" \
+    || bad "stealth mode hardcodes mgba-sdl and fails when only mgba-qt is packaged"
+grep -q 'mgba-sdl || ' rootfs/build-rootfs.sh \
+    && ok "build prefers the SDL mGBA build" || bad "build does not prefer mgba-sdl"
+
 # a kernel with an embedded initramfs boots to busybox, not to ghOSt
 grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
     && ok "extractor detects an embedded initramfs" \

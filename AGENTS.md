@@ -72,6 +72,14 @@ ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal
 - `overlay/opt/ghost/scripts/ram-audit.sh`
 - `overlay/opt/ghost/themes/ghost-theme.py`
 - `overlay/opt/ghost/themes/generate-wallpaper.py`
+- `kernel/build-rocknix.sh` (DTB discovery under ROCKNIX's boot payload, DDR-aware U-Boot, staged boot assets, module + firmware staging)
+- `overlay/usr/local/bin/ghost-expand-fs.sh` (rewritten for the MBR layout)
+- `overlay/usr/local/sbin/ghost-panel`, `overlay/usr/local/sbin/ghost-wifi-import` (ported from handtop, MIT notices kept)
+- `overlay/etc/systemd/system/{ghost-panel,ghost-wifi-import}.service`; `expand-rootfs.service` deleted
+- `image/bootfiles/{wifi.txt,panel.txt,README.txt}`, `docs/panel.md`
+- `tests/` (static, unit and packer suites; CI `static` job gates the build)
+- `LICENSE`, `NOTICE`, `LICENSES/MIT-handtop.txt`, `LICENSES/GPL-2.0.txt`
+- `flash_dd_with_gpt.sh`, `flash_dd_with_gpt.MacOS.sh` (`.img.xz`, conditional GPT repair, zsh regex fix)
 
 ## Tests
 

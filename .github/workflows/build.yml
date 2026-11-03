@@ -16,6 +16,11 @@ on:
         required: false
         default: 'xfce'
 
+# A new push supersedes older runs instead of queueing another 6-hour build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Fast checks that need no Docker: syntax, unit wiring and a real packer run.
   static:

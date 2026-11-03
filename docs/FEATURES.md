@@ -32,7 +32,8 @@ Status values:
 | Read PE6 at boot, pick `dtb.img` for the panel present | done | `overlay/usr/local/sbin/ghost-panel` |
 | `panel.txt` override (`auto`/`regular`/`rev6`), CRLF, editable from Windows | done | `image/bootfiles/panel.txt`, `docs/panel.md` |
 | One-shot switch with loop guard and `logs/panel.txt` diagnostics | done | same |
-| Which panel is right for retail units | conflict | `docs/panel.md` says both exist and PE6 decides; `docs/PITFALLS-cyberdeck.md` §4 says the rev6 DTB is wrong for retail and the regular one is hard-coded. Hardware run needed before trusting automatic switching |
+| Automatic switching can never land on the rev6 tree by itself | done | `ghost-panel` refuses it and says so; `tests/panel-test.sh` proves it |
+| Which tree retail units need | open | `docs/panel.md` says both exist; `docs/PITFALLS-cyberdeck.md` §4 says rev6 garbles retail. The code now prefers `regular` unless `panel.txt` says otherwise; hardware settles the rest |
 
 ## Desktop, input, UI
 

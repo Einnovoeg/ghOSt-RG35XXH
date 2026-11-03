@@ -31,6 +31,7 @@ pointing at the right one.
 | `dtb-regular.img` / `dtb-rev6.img` missing (older image) | Nothing changed |
 | Switched on the last boot and the pin now says the other panel | Not switched again: no restart loop; logged until the two match |
 | `panel.txt` says `regular` / `rev6` | That panel, whatever the pin says |
+| `auto` and PE6 reads low (would mean rev6) | **Not switched automatically.** Retail boards draw a white line with the rev6 tree, so a pin reading alone never moves a working screen onto it; set `rev6` in `panel.txt` if the unit really has that panel |
 
 ## Safety
 

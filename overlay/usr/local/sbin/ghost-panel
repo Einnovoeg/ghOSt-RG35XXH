@@ -250,6 +250,16 @@ def main():
             return 0
         want = "regular" if pe6 else "rev6"
         why = "board pin PE6 = %d (%s panel)" % (pe6, want)
+        if want == "rev6":
+            # Retail boards carry the regular panel and the rev6 tree draws a white
+            # line on them, so a pin reading alone must not change a working screen.
+            # A unit that really has the rev6 panel asks for it in panel.txt.
+            msg = ("PE6 reads low, which suggests the rev6 panel, but an automatic "
+                   "switch to the rev6 tree is refused: put 'rev6' in panel.txt on "
+                   "the boot partition if this unit really has that panel.")
+            say(msg)
+            boot_log(msg)
+            return 0
     have = current(read_bytes("dtb.img"))
     if have is None:
         say("dtb.img is neither %s; changed by hand, left alone (%s)"

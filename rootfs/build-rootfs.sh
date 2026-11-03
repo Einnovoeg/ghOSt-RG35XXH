@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # ghOSt Rootfs Builder
-# Debootstrap Debian Bookworm ARM64 + all packages
+# Debootstrap Debian Trixie ARM64 + all packages
 # =============================================================================
 set -euo pipefail
 source "$(dirname "$0")/../config.sh"

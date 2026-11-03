@@ -4,7 +4,7 @@
 
 ### 1. Point of this project
 
-ghOSt is a custom Debian Bookworm ARM64 image for the Anbernic RG35XXH. The goal is to turn the device into a portable security, RF, wireless, and privacy workstation with a controller-friendly launcher, stealth mode, and a curated set of tools that still fit within the hardware limits of the H700 platform.
+ghOSt is a custom Debian Trixie ARM64 image for the Anbernic RG35XXH. The goal is to turn the device into a portable security, RF, wireless, and privacy workstation with a controller-friendly launcher, stealth mode, and a curated set of tools that still fit within the hardware limits of the H700 platform.
 
 ghOSt is independent of [junsulee119/handtop](https://github.com/junsulee119/handtop).
 handtop is a separate Debian build for the same hardware that works on real units and
@@ -102,7 +102,7 @@ CI runs it as the `static` job before the long build. Run it as root to get the 
 **ghOSt** (Handheld Security and Signal Terminal) is a custom Linux distribution for the **Anbernic RG35XXH** handheld gaming device. It transforms the stock Anbernic firmware into a portable security research, signal intelligence, and wireless tooling platform.
 
 **Target hardware:** Anbernic RG35XXH (Allwinner H700, 1GB RAM, 640×480 display)
-**Base OS:** Debian Bookworm ARM64
+**Base OS:** Debian Trixie ARM64
 **Build system:** Native shell scripts + optional Docker container
 
 ---
@@ -176,7 +176,7 @@ ghOSt-RG35XXH/
 ### Build Stages (build.sh)
 
 1. **build_kernel()** — Stages the proven ROCKNIX release payload (kernel, DTBs, U-Boot, matching modules) by default. `GHOST_BOOT_SOURCE=source` builds the ROCKNIX tree in a container instead; `BOOT_FLOW=legacy` stages the KNULLI chain.
-2. **build_rootfs()** — Deboots Debian Bookworm ARM64, runs 17 install stages
+2. **build_rootfs()** — Deboots Debian Trixie ARM64, runs 17 install stages
 3. **apply_overlay()** — Rsyncs overlay/, installs launcher/, stealthd/, hey/, firstboot/
 4. **configure_chroot()** — Runs configure.sh inside ARM64 chroot
 5. **assemble_image()** — Partitions GPT image, writes boot chain, rsyncs rootfs, compresses
@@ -185,7 +185,7 @@ ghOSt-RG35XXH/
 
 | Stage | Name | Key Packages |
 |-------|------|--------------|
-| 1 | Debootstrap | Debian Bookworm ARM64 |
+| 1 | Debootstrap | Debian Trixie ARM64 |
 | 2 | APT config | Debian + Kali rolling sources |
 | 3 | Base | systemd, network-manager, openssh-server, python3, golang, lua, ruby |
 | 4 | Shell | fish, tmux, micro, vim, bat, ripgrep, fzf, zoxide, atuin, btop, ncdu, duf, glow |

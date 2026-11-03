@@ -545,6 +545,15 @@ class GhOStLauncher:
 
     def launch(self, cmd):
         """Launch application"""
+        # A missing binary used to fail inside a daemon thread, so the menu looked
+        # like it did nothing at all. Say which command is not installed instead.
+        words = [w for w in cmd.split() if not w.startswith("-")]
+        if words and words[0] == "sudo":
+            words = words[1:]
+        if words and words[0] not in ("bash", "sh", "fish") and not shutil.which(words[0]):
+            self.status_msg = f"not installed: {words[0]}"
+            self.status_time = time.time()
+            return
         self.status_msg = f"Launching..."
         self.status_time = time.time()
         threading.Thread(

@@ -138,6 +138,13 @@ grep -q 'fake-hwclock' rootfs/build-rootfs.sh \
     && ok "fake-hwclock carries the clock across reboots" \
     || bad "fake-hwclock missing: the clock restarts at the epoch every boot"
 
+# every interactive launcher entry opens foot, and writing foot.ini installing nothing
+if grep -qE '^[[:space:]]+foot foot-terminfo' rootfs/build-rootfs.sh; then
+    ok "foot terminal is installed for the launcher entries"
+else
+    bad "foot is not installed, so every launcher terminal entry fails"
+fi
+
 # passwordless root in any stage would override the restricted sudo list
 grep -rq 'NOPASSWD: ALL' rootfs/ overlay/ 2>/dev/null \
     && bad "a build stage grants NOPASSWD: ALL" || ok "no passwordless root rule"

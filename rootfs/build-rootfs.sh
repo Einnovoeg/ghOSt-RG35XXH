@@ -760,6 +760,7 @@ install_gui() {
 
     $APT \
         cage weston wayland-utils \
+        foot foot-terminfo \
         libwayland-dev \
         wvkbd \
         pipewire pipewire-pulse pipewire-audio \

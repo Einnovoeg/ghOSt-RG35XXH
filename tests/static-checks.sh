@@ -99,6 +99,15 @@ for f in flash_dd_with_gpt.sh flash_dd_with_gpt.MacOS.sh; do
     grep -q 'img\.xz' "$f" && ok "$f accepts .img.xz" || bad "$f rejects .img.xz"
 done
 
+# passwordless root in any stage would override the restricted sudo list
+grep -rq 'NOPASSWD: ALL' rootfs/ overlay/ 2>/dev/null \
+    && bad "a build stage grants NOPASSWD: ALL" || ok "no passwordless root rule"
+# units start these by absolute path, so the file must be executable in git
+for f in overlay/usr/local/bin/ghost-power overlay/usr/local/sbin/ghost-panel \
+         overlay/usr/local/sbin/ghost-wifi-import; do
+    [[ -x "$f" ]] && ok "$(basename "$f") is executable" || bad "$(basename "$f") is not executable"
+done
+
 # a kernel with an embedded initramfs boots to busybox, not to ghOSt
 grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
     && ok "extractor detects an embedded initramfs" \

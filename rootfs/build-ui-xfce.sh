@@ -58,8 +58,12 @@ if ! id '$TARGET_USER' >/dev/null 2>&1; then
     useradd -m -s /bin/bash -G sudo,video,audio,plugdev,dialout,input,netdev,bluetooth '$TARGET_USER'
     echo '$TARGET_USER:CaptainCrunch' | chpasswd
 fi
-echo '$TARGET_USER ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/90-'$TARGET_USER'
-chmod 440 /etc/sudoers.d/90-'$TARGET_USER'
+# Never grant a passwordless-root rule here: it would override the restricted
+# list configure.sh writes and turn the kiosk account into root.
+rm -f /etc/sudoers.d/90-'$TARGET_USER'
+echo \"'$TARGET_USER' ALL=(ALL) NOPASSWD: /usr/bin/airmon-ng, /usr/bin/airodump-ng, /usr/bin/kismet, /usr/bin/bettercap, /usr/sbin/tcpdump, /usr/bin/msfconsole, /usr/sbin/iw, /sbin/ip\" > /etc/sudoers.d/10-'$TARGET_USER'
+echo \"'$TARGET_USER' ALL=(ALL) ALL\" >> /etc/sudoers.d/10-'$TARGET_USER'
+chmod 440 /etc/sudoers.d/10-'$TARGET_USER'
 
 # LightDM autologin to XFCE
 mkdir -p /etc/lightdm/lightdm.conf.d

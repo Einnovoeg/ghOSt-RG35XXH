@@ -154,7 +154,8 @@ if [[ -n "$ROOT_OFF" ]]; then
     done
     # keep it only if it actually held something we need; a small ext4 may be a
     # recovery or storage partition rather than the root filesystem
-    if [[ -d "$WORK/root/lib/modules" || -d "$WORK/root/usr/share/bootloader" ]]; then
+    if [[ -d "$WORK/root/lib/modules" || -d "$WORK/root/usr/lib/modules" \
+       || -d "$WORK/root/usr/share/bootloader" ]]; then
         ROOT_SRC="$WORK/root"
     else
         warn "ext4 partition p$ROOT_INDEX holds no root filesystem; continuing"
@@ -172,8 +173,11 @@ if [[ -n "$SQUASH" ]]; then
     log "squashfs root filesystem: $(basename "$SQUASH") ($(du -h "$SQUASH" | cut -f1))"
     if command -v unsquashfs >/dev/null 2>&1; then
         mkdir -p "$WORK/sq"
+        # Debian merges /usr, so modules and firmware usually live under
+        # usr/lib; ask for both spellings and use whichever the image has.
         unsquashfs -q -d "$WORK/sq" "$SQUASH" \
-            lib/modules lib/firmware usr/lib/firmware usr/share/bootloader \
+            lib/modules usr/lib/modules lib/firmware usr/lib/firmware \
+            usr/share/bootloader \
             > "$WORK/unsquash.log" 2>&1 || warn "unsquashfs reported: $(tail -2 "$WORK/unsquash.log" | tr '\n' ' ')"
         ROOT_SRC="$WORK/sq"
     else
@@ -183,8 +187,13 @@ fi
 [[ -n "$ROOT_SRC" ]] || error "no root filesystem found: no large ext4 partition and no squashfs image on the boot partition"
 
 # --- find the pieces --------------------------------------------------------
-IMAGE_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -maxdepth 3 -name 'Image' 2>/dev/null | head -1)"
-[[ -n "$IMAGE_SRC" ]] || error "no kernel Image in the payload (boot listing: $(head -8 "$WORK/boot-listing.txt" | tr '\n' ' '))"
+# ROCKNIX calls the kernel KERNEL; other builds call it Image.
+IMAGE_SRC=""
+for name in Image KERNEL kernel.img; do
+    IMAGE_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -maxdepth 3 -name "$name" 2>/dev/null | head -1 || true)"
+    [[ -n "$IMAGE_SRC" ]] && break
+done
+[[ -n "$IMAGE_SRC" ]] || error "no kernel image (Image/KERNEL) in the payload (boot listing: $(head -8 "$WORK/boot-listing.txt" | tr '\n' ' '))"
 
 # bash 3.2 (macOS /bin/bash) has no mapfile, so build the list with a read loop
 DTBS=()
@@ -193,8 +202,17 @@ while IFS= read -r d; do DTBS+=("$d"); done < <(
          \( -name '*rg35xx*.dtb' -o -name '*h700*.dtb' \) 2>/dev/null | sort -u)
 (( ${#DTBS[@]} )) || error "no device trees in the payload"
 
-UBOOT_SRC="$(find "$ROOT_SRC/usr/share/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1)"
-[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1)"
+UBOOT_SRC="$(find "$ROOT_SRC/usr/share/bootloader" -name "*${ROCKNIX_IMAGE_DDR}*u-boot-sunxi-with-spl.bin" 2>/dev/null | head -1 || true)"
+[[ -n "$UBOOT_SRC" ]] || UBOOT_SRC="$(find "$BOOT_SRC" "$ROOT_SRC/usr/share/bootloader" -name '*u-boot-sunxi-with-spl.bin' 2>/dev/null | head -1 || true)"
+# ROCKNIX does not keep U-Boot as a file: it is written to the raw sectors that
+# the boot ROM reads (8 KiB in, before the first partition). Take it from there.
+if [[ -z "$UBOOT_SRC" ]]; then
+    dd if="$IMG" of="$WORK/uboot.bin" bs=1024 skip=8 count=1008 status=none 2>/dev/null || true
+    case "$(head -c 8 "$WORK/uboot.bin" 2>/dev/null)" in
+        eGON*) UBOOT_SRC="$WORK/uboot.bin"
+               log "u-boot taken from the raw image at 8KiB (eGON header)" ;;
+    esac
+fi
 [[ -n "$UBOOT_SRC" ]] || warn "no U-Boot SPL in the payload; the packer needs one"
 
 # --- stage ------------------------------------------------------------------
@@ -229,7 +247,8 @@ while IFS= read -r m; do
     rsync -a "$m/" "$OVERLAY/lib/modules/$ver/"
     log "modules: $ver ($(find "$m" -type f 2>/dev/null | wc -l | tr -d ' ' || true) files)"
     mods=$(( mods + 1 ))
-done < <(find "$ROOT_SRC/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)
+done < <(find "$ROOT_SRC/lib/modules" "$ROOT_SRC/usr/lib/modules" \
+              -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -u)
 for f in "$ROOT_SRC/lib/firmware" "$ROOT_SRC/usr/lib/firmware"; do
     [[ -d "$f" ]] || continue
     rsync -a "$f/" "$OVERLAY/lib/firmware/"

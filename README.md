@@ -10,6 +10,18 @@ ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default 
 > Legacy KNULLI 4.9 + GPT (`BOOT_FLOW=legacy`) is kept for experiments only.
 > See `docs/PITFALLS-cyberdeck.md`, `VERSIONS`, `image/pack-image-rocknix.sh`.
 
+## Kernel and boot payload
+
+ghOSt does not ship a self-built kernel. The kernel, both device trees, the U-Boot
+SPL and the kernel modules come from the official ROCKNIX release image for this
+hardware, pinned in `VERSIONS` by asset name and SHA-256, extracted without loop
+devices or mounts, and patched for the AXP717 regulators. That payload is the part
+that is known to boot on real RG35XXH units, including both screen panels; ghOSt
+supplies everything above it (rootfs, tools, launcher, stealth mode, UI).
+
+`GHOST_BOOT_SOURCE=source` builds ROCKNIX's kernel tree in a container instead,
+for experiments; it is not the supported path.
+
 ## Provenance: ghOSt is the project, handtop is a reference
 
 ghOSt is an independent project. It is **not** a fork of, and does not track,

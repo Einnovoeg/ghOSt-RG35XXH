@@ -33,7 +33,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            mtools dosfstools e2fsprogs fdisk u-boot-tools xz-utils shellcheck python3
+            mtools dosfstools e2fsprogs fdisk u-boot-tools xz-utils shellcheck python3 rsync
 
       - name: Static checks + image packer (root so mkfs -d sets ownership)
         run: sudo ./tests/run-all.sh
@@ -65,13 +65,16 @@ jobs:
           path: build/rocknix
           key: rocknix-${{ hashFiles('VERSIONS') }}
 
-      - name: Build kernel + u-boot (ROCKNIX, no embedded initramfs + DTB regulator fix)
+      - name: Cache ROCKNIX release image
+        uses: actions/cache@v4
+        with:
+          path: build/cache
+          key: rocknix-image-${{ hashFiles('VERSIONS') }}
+
+      - name: Stage proven ROCKNIX boot payload (kernel, DTBs, U-Boot, modules)
         run: |
-          chmod +x kernel/build-rocknix.sh scripts/build-joypad-module.sh
-          ./kernel/build-rocknix.sh fetch
-          ./kernel/build-rocknix.sh docker
-          ./kernel/build-rocknix.sh kernel
-          ./kernel/build-rocknix.sh dtb
+          chmod +x kernel/fetch-rocknix-boot.sh scripts/build-joypad-module.sh
+          ./kernel/fetch-rocknix-boot.sh
           ./scripts/build-joypad-module.sh || echo "joypad module optional, continuing"
 
       - name: Build rootfs (Debian Trixie + ghOSt tools)

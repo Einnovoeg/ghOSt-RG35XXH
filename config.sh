@@ -16,7 +16,7 @@ DEVICE_TARGET="rg35xxh"               # rg35xxh | rg40xxh | rg35xx-2024
 # BUILD DIRECTORIES
 # Use local paths to avoid requiring root/sudo
 # -----------------------------------------------------------------------------
-BUILD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/build"
+BUILD_DIR="${BUILD_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/build}"
 ROOTFS_DIR="${ROOTFS_DIR:-$BUILD_DIR/rootfs}"
 KERNEL_BUILD_DIR="$BUILD_DIR/kernel"
 UBOOT_BUILD_DIR="$BUILD_DIR/uboot"
@@ -129,6 +129,13 @@ DTB_REV6_NAME="${DTB_REV6_NAME:-sun50i-h700-anbernic-rg35xx-h-rev6-panel.dtb}"
 # ROCKNIX ships one U-Boot SPL per RAM type (H700_DDR4_..., H700_DDR3_...).
 # RG35XXH boards are DDR4; set UBOOT_DDR=DDR3 only for a different H700 board.
 UBOOT_DDR="${UBOOT_DDR:-DDR4}"
+
+# Where the kernel/boot payload comes from:
+#   release (default) — extract the proven ROCKNIX release payload, no kernel
+#                       build, no toolchain, minutes instead of 45 minutes
+#   source            — build ROCKNIX's kernel tree in a container (unproven
+#                       on hardware; kept for experiments)
+GHOST_BOOT_SOURCE="${GHOST_BOOT_SOURCE:-release}"
 
 # -----------------------------------------------------------------------------
 # KALI REPOSITORY

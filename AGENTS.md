@@ -57,10 +57,8 @@ changed. ghOSt is not a fork, does not track handtop, and does not depend on it 
 
 ### 3. Steps that need to be taken next
 
-1. Re-run the full Docker build from the cached state. The image stage no longer needs privileged loop support, but the container still needs `--privileged` for the chroot stages:
-   `docker compose up --build`
-   Do not use `SKIP_KERNEL=true` for the verification run unless `/opt/ghost-build/boot0.img` and the other staged boot assets already exist.
-2. If `pack-image-rocknix.sh` fails, it now fails on a specific, checkable input rather than on loop setup. Confirm the three artifacts it names: the u-boot SPL under `install_pkg/u-boot-*/usr/share/bootloader/`, `<KERNEL_NAME>/arch/arm64/boot/Image`, and `dts/allwinner/$DTB_NAME`. For a test without a kernel build, point `GHOST_UBOOT_BIN`, `GHOST_KERNEL_IMAGE` and `GHOST_DTB_FILE` at files.
+1. The boot payload is no longer built from source. `kernel/fetch-rocknix-boot.sh` downloads the official ROCKNIX H700 release image pinned in `VERSIONS` (asset + SHA-256), extracts kernel, device trees, U-Boot SPL and the matching modules without loop devices or mounts, patches both DTBs, and stages them in `build/kernel/boot` + `build/kernel/rootfs-overlay`. `GHOST_BOOT_SOURCE=source` still builds the tree in a container, but that path has never been shown to boot.
+2. If the extractor fails, it prints every partition type and the boot listing it found, so the fix is specific: check the pinned tag/SHA in `VERSIONS`, and the FAT/ext4 detection (`blkid -O`, falling back to mtools). To exercise packing with no download at all, point `GHOST_UBOOT_BIN`, `GHOST_KERNEL_IMAGE`, `GHOST_DTB_FILE` and `GHOST_DTB_REV6_FILE` at files.
 3. Flash the resulting `output/ghOSt-RG35XXH-<version>-<sha>.img.xz` and confirm on hardware: u-boot loads `Image`/`dtb.img`/`boot.scr` from p1, the kernel mounts p2 by PARTUUID, and first boot runs `ghost-expand-fs`.
 4. Check the two ported behaviours on the unit: `journalctl -u ghost-panel` should say the DTB matches (or switch once and restart); filling `wifi.txt` on the card before boot should join the network without a keyboard.
 5. Update the release notes and README if needed, then move on to the broader repo-cleanup and licensing work.
@@ -176,7 +174,7 @@ ghOSt-RG35XXH/
 
 ### Build Stages (build.sh)
 
-1. **build_kernel()** — Stages KNULLI prebuilt H700 boot chain (boot0, boot_package, boot.img, env.img) and kernel modules
+1. **build_kernel()** — Stages the proven ROCKNIX release payload (kernel, DTBs, U-Boot, matching modules) by default. `GHOST_BOOT_SOURCE=source` builds the ROCKNIX tree in a container instead; `BOOT_FLOW=legacy` stages the KNULLI chain.
 2. **build_rootfs()** — Deboots Debian Bookworm ARM64, runs 17 install stages
 3. **apply_overlay()** — Rsyncs overlay/, installs launcher/, stealthd/, hey/, firstboot/
 4. **configure_chroot()** — Runs configure.sh inside ARM64 chroot

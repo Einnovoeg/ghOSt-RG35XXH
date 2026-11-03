@@ -6,6 +6,17 @@ ROCKNIX_REPO=https://github.com/ROCKNIX/distribution.git
 ROCKNIX_COMMIT=ebcca488969f4605f7353ef0906a1f150e6268a1
 ROCKNIX_BRANCH=next
 
+# Proven boot payload: the official ROCKNIX release image for the H700. ghOSt
+# takes the kernel, device trees, U-Boot and matching modules from this image
+# (kernel/fetch-rocknix-boot.sh) because that payload is known to boot on real
+# units, including both screen panels. Pins are the release asset and its
+# GitHub-published SHA-256; bump both together.
+ROCKNIX_IMAGE_TAG="${ROCKNIX_IMAGE_TAG:-20261101}"
+ROCKNIX_IMAGE_DDR="${ROCKNIX_IMAGE_DDR:-DDR4}"
+ROCKNIX_IMAGE_FILE="${ROCKNIX_IMAGE_FILE:-ROCKNIX-H700.aarch64-${ROCKNIX_IMAGE_TAG}-${ROCKNIX_IMAGE_DDR}.img.gz}"
+ROCKNIX_IMAGE_URL="${ROCKNIX_IMAGE_URL:-https://github.com/ROCKNIX/distribution/releases/download/${ROCKNIX_IMAGE_TAG}/${ROCKNIX_IMAGE_FILE}}"
+ROCKNIX_IMAGE_SHA256="${ROCKNIX_IMAGE_SHA256:-46ec25c30be24fff5f154460f988e53c0311e115fd72ee7b861b55e59c553a07}"
+
 # Debian release for the bootable rootfs.
 # Trixie (gcc 14) is required: Bookworm gcc-12 cannot build kernel modules
 # with flags emitted by the ROCKNIX gcc-15 toolchain (-fmin-function-alignment).

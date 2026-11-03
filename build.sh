@@ -167,8 +167,13 @@ preflight() {
 # =============================================================================
 build_kernel() {
     if [[ "${BOOT_FLOW:-rocknix}" == "rocknix" ]]; then
-        section "Building H700 Kernel (ROCKNIX mainline — proven boot path)"
-        bash "$SCRIPT_DIR/kernel/build-rocknix.sh" all
+        if [[ "${GHOST_BOOT_SOURCE:-release}" == "source" ]]; then
+            section "Building H700 Kernel (ROCKNIX mainline, from source — experimental)"
+            bash "$SCRIPT_DIR/kernel/build-rocknix.sh" all
+        else
+            section "Staging proven ROCKNIX boot payload (release image)"
+            bash "$SCRIPT_DIR/kernel/fetch-rocknix-boot.sh"
+        fi
         if command -v docker >/dev/null 2>&1; then
             bash "$SCRIPT_DIR/scripts/build-joypad-module.sh" || \
                 warn "Joypad module build failed — joy2mouse will retry at boot"

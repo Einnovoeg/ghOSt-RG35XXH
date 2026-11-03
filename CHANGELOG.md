@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## Unreleased
 
+- The kernel and boot payload now come from the official ROCKNIX H700 release image, pinned in `VERSIONS` by asset name and SHA-256 and extracted without loop devices or mounts (`kernel/fetch-rocknix-boot.sh`): kernel `Image`, both panel device trees (AXP717 regulator fix applied), the DDR-specific U-Boot SPL, and the kernel modules and firmware that match that exact kernel. This replaces building a kernel from source, which never booted on hardware, and removes the toolchain/`gcc` mismatch that made module builds fragile. `GHOST_BOOT_SOURCE=source` keeps the old path for experiments.
+
 - Rebuilt image assembly without loop devices, device-mapper or mounts. Docker Desktop on macOS failed the old path with `mkfs.ext4: Operation not permitted while trying to determine filesystem size`; partitions are now built as files (`mkfs.vfat -C` + mtools, `mkfs.ext4 -d <rootfs>`) and written into the MBR image at fixed offsets, following the approach used by junsulee119/handtop. `e2fsck -fn` validates the root filesystem before assembly.
 - `boot.scr` is regenerated from `patches/uboot/boot.cmd` at pack time with `root=PARTUUID=<disk-id>-02`, replacing `root=/dev/mmcblk0p2` so the card boots from either SD slot.
 - Image packing now strips host identity (`machine-id`, ssh host keys, build-only `qemu-aarch64-static`, apt caches, stale `/boot`) and sizes partitions from the actual rootfs, with `IMAGE_SIZE_GB` acting as a floor instead of a cap.

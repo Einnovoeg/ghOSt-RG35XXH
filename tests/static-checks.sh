@@ -137,6 +137,21 @@ else
     echo "  skip  shellcheck not installed on this host"
 fi
 
+echo "-- proven boot payload is the default"
+BOOTSRC=kernel/fetch-rocknix-boot.sh
+[[ -f $BOOTSRC ]] && ok "release payload extractor exists" || bad "extractor missing"
+grep -q '^GHOST_BOOT_SOURCE=' config.sh && grep -q 'release' config.sh \
+    && ok "release payload is the default source" || bad "default boot source not set"
+grep -q 'fetch-rocknix-boot.sh' build.sh && ok "build.sh uses the extractor" || bad "build.sh ignores it"
+grep -q 'fetch-rocknix-boot.sh' .github/workflows/build.yml \
+    && ok "CI stages the release payload" || bad "CI does not use the extractor"
+grep -q '^ROCKNIX_IMAGE_SHA256=' VERSIONS && ok "release image is pinned with a checksum" \
+    || bad "no release checksum pin"
+grep -q 'sha256sum -c' $BOOTSRC && ok "extractor verifies the checksum" || bad "no checksum check"
+grep -qE '^[[:space:]]*(losetup|kpartx|mount)[[:space:]]' $BOOTSRC \
+    && bad "extractor uses loop devices or mounts" || ok "extractor is loop-free"
+
+
 echo "-- boot asset staging (ROCKNIX layout)"
 KERNEL_BOOT_REF=image/pack-image-rocknix.sh
 grep -q 'KERNEL_BOOT="\$KERNEL_BUILD_DIR/boot"' $KERNEL_BOOT_REF \

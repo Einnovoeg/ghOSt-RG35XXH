@@ -99,6 +99,12 @@ for f in flash_dd_with_gpt.sh flash_dd_with_gpt.MacOS.sh; do
     grep -q 'img\.xz' "$f" && ok "$f accepts .img.xz" || bad "$f rejects .img.xz"
 done
 
+# firstboot.sh launches the interactive setup; it has to be installed too
+grep -q 'firstboot-interactive.sh' firstboot/firstboot.sh \
+    && grep -q 'cp .*firstboot-interactive.sh' build.sh \
+    && ok "firstboot installs its interactive setup" \
+    || bad "firstboot-interactive.sh is never installed — first boot does nothing"
+
 # launcher and dos-library call dosbox-x; the build must install it or shim it
 grep -q 'dosbox-x' rootfs/build-rootfs.sh \
     && ok "DOS entries can find dosbox-x" || bad "launcher needs dosbox-x, build provides none"

@@ -233,11 +233,16 @@ apply_overlay() {
     chmod +x "$ROOTFS_DIR/opt/ghost/hey/hey.py"
     ln -sf /opt/ghost/hey/hey.py "$ROOTFS_DIR/usr/local/bin/hey"
 
-    log "Installing firstboot script..."
+    log "Installing firstboot scripts..."
     cp "$SCRIPT_DIR/firstboot/firstboot.sh" "$ROOTFS_DIR/usr/local/bin/"
+    # firstboot.sh launches the interactive setup inside foot. Without this copy
+    # the first boot exits immediately and the operator never sets a password,
+    # SSH key, timezone or Wi-Fi.
+    cp "$SCRIPT_DIR/firstboot/firstboot-interactive.sh" "$ROOTFS_DIR/usr/local/bin/"
     cp "$SCRIPT_DIR/firstboot/firstboot.service" \
        "$ROOTFS_DIR/etc/systemd/system/"
-    chmod +x "$ROOTFS_DIR/usr/local/bin/firstboot.sh"
+    chmod +x "$ROOTFS_DIR/usr/local/bin/firstboot.sh" \
+             "$ROOTFS_DIR/usr/local/bin/firstboot-interactive.sh"
 
     log "Overlay applied"
 }

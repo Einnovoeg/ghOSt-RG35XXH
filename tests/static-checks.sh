@@ -108,6 +108,23 @@ for f in overlay/usr/local/bin/ghost-power overlay/usr/local/sbin/ghost-panel \
     [[ -x "$f" ]] && ok "$(basename "$f") is executable" || bad "$(basename "$f") is not executable"
 done
 
+# a unit that starts an overlay script by path needs that script executable, or
+# systemd fails it with "Permission denied" and the feature silently never runs
+unit_bad=0
+for unit in overlay/etc/systemd/system/*.service; do
+    [[ -f "$unit" ]] || continue
+    for exe in $(awk -F= '/^ExecStart=/{print $2}' "$unit" | awk '{print $1}'); do
+        case "$exe" in
+            /usr/local/*|/opt/*)
+                if [[ -e "overlay$exe" && ! -x "overlay$exe" ]]; then
+                    bad "$(basename "$unit"): $exe is not executable"
+                    unit_bad=1
+                fi ;;
+        esac
+    done
+done
+(( unit_bad )) || ok "every overlay ExecStart target is executable"
+
 # a kernel with an embedded initramfs boots to busybox, not to ghOSt
 grep -q "TRAILER!!!" kernel/fetch-rocknix-boot.sh \
     && ok "extractor detects an embedded initramfs" \

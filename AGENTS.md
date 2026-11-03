@@ -113,11 +113,25 @@ ghOSt-RG35XXH/
 ├── README.md                 # Project overview and quick-start
 │
 ├── kernel/
-│   ├── build-kernel.sh       # Stages KNULLI prebuilt boot chain + kernel modules
-│   └── boot/uEnv.txt         # U-Boot environment
+│   ├── fetch-rocknix-boot.sh # Stages the proven ROCKNIX release payload (default)
+│   ├── build-rocknix.sh      # Builds the same payload from source (experimental)
+│   ├── build-kernel.sh       # Legacy KNULLI chain (BOOT_FLOW=legacy)
+│   └── boot/                 # U-Boot environment for the legacy chain
+│
+├── image/
+│   ├── pack-image-rocknix.sh # Loop-free MBR assembly: SPL, FAT boot, ext4 rootfs
+│   └── bootfiles/            # wifi.txt / panel.txt / README.txt for the boot partition
+│
+├── patches/                  # boot.cmd, empty-initramfs patch, DTB regulator fix
+├── scripts/                  # DTB regulator patcher, joypad module build
+├── tests/                    # fast suites; they gate the long build
+├── docs/                     # panel.md, FEATURES.md, cyberdeck build notes
+├── LICENSES/                 # upstream notices kept verbatim
+├── hey/hey.py                # AI CLI, installed to /opt/ghost/hey
 │
 ├── rootfs/
-│   └── build-rootfs.sh       # Debootstrap + all package installation (17 stages)
+│   ├── build-rootfs.sh       # Debootstrap + all package installation stages
+│   └── build-ui-xfce.sh      # XFCE + LightDM desktop, joy2mouse, battery fix
 │
 ├── overlay/                  # Files applied to rootfs before chroot configure
 │   ├── etc/
@@ -137,7 +151,6 @@ ghOSt-RG35XXH/
 │   │   ├── themes/generate-wallpaper.py
 │   │   ├── dosbox/ghost.conf
 │   │   ├── dos-library/dos-library.py
-│   │   ├── hey/hey.py             # AI CLI (Claude/GPT/Gemini + whisper.cpp + piper)
 │   │   ├── scripts/configure.sh    # In-chroot system configuration
 │   │   └── wallpapers/shodan.jpg
 │   └── usr/local/bin/
@@ -173,7 +186,7 @@ ghOSt-RG35XXH/
 2. **build_rootfs()** — Deboots Debian Trixie ARM64, runs 17 install stages
 3. **apply_overlay()** — Rsyncs overlay/, installs launcher/, stealthd/, hey/, firstboot/
 4. **configure_chroot()** — Runs configure.sh inside ARM64 chroot
-5. **assemble_image()** — Partitions GPT image, writes boot chain, rsyncs rootfs, compresses
+5. **assemble_image()** — `image/pack-image-rocknix.sh` builds the MBR image without loop devices or mounts (SPL at 8 KiB, FAT boot at 16 MiB, ext4 rootfs at 272 MiB), validates it with `e2fsck -fn`, strips host identity, and writes `.img.xz` + `SHA256SUMS` (+ `.bmap` when `bmaptool` is present).
 
 ### Rootfs Build Stages (rootfs/build-rootfs.sh)
 

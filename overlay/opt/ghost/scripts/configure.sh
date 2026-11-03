@@ -869,6 +869,9 @@ systemctl enable ghost-expand-fs.service
 # Screen-panel DTB selection and pre-boot Wi-Fi import (boot partition files)
 systemctl enable ghost-panel.service 2>/dev/null || true
 systemctl enable ghost-wifi-import.service 2>/dev/null || true
+# Boot diagnostics on the FAT partition, so a device that misbehaves can be read
+# from a PC. The unit is guarded by ConditionPathExists=/boot/logs.
+systemctl enable dump-boot-logs.service 2>/dev/null || true
 
 # Apply default theme (catppuccin)
 if ! sudo -u "$GHOST_USER" python3 /opt/ghost/themes/ghost-theme.py catppuccin; then

@@ -104,5 +104,21 @@ for u in "${missing[@]:-}"; do
     esac
 done
 
+echo "-- installable units are actually enabled"
+# A unit with [Install] that nothing enables is a feature that never runs.
+# usb-massstorage is deliberately on demand: enabling it at boot would take the
+# gadget away from usb-mtp and expose the card whenever a cable is plugged in.
+ON_DEMAND=" usb-massstorage.service "
+never_enabled=0
+for f in "$UNITS"/*.service; do
+    name="$(basename "$f")"
+    grep -qE '^(WantedBy|RequiredBy)=' "$f" || continue
+    case "$ON_DEMAND" in *" $name "*) continue ;; esac
+    grep -rqs -- "systemctl enable .*$name" build.sh rootfs/ overlay/ && continue
+    bad "$name installs a target but nothing enables it — the feature never runs"
+    never_enabled=1
+done
+(( never_enabled )) || ok "every installable unit is enabled somewhere"
+
 echo
 if (( fail == 0 )); then echo "unit checks: PASS"; else echo "unit checks: FAIL"; exit 1; fi

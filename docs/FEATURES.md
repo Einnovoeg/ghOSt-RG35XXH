@@ -59,7 +59,7 @@ Status values:
 | Wi-Fi watchdog that recovers a dropped association | done | `wifi-watchdog.sh`, `wifi-watchdog.service` |
 | Bluetooth stack with auto-enable, BT keyboard and headset support | done | `build-rootfs.sh` stage 5, `bluetuith` in stage 6 |
 | USB-C gadget: MTP over `ffs.mtp` plus ECM (no RNDIS: one MUSB controller) | done | `usb-mtp-setup`, `usb-mtp.service` |
-| USB mass-storage mode | done | `usb-massstorage-setup`, `usb-massstorage.service` |
+| USB mass-storage mode (on demand) | done | `usb-massstorage-setup` + unit, started by hand: enabling it at boot would take the gadget from MTP |
 | USB-C host mode drivers (RTL-SDR, AX88179, CH341/CP210x/FTDI, hubs) | done | firmware/module stages 16b; ROCKNIX modules |
 
 ## RF, SDR, signal

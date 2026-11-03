@@ -10,12 +10,24 @@ ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default 
 > Legacy KNULLI 4.9 + GPT (`BOOT_FLOW=legacy`) is kept for experiments only.
 > See `docs/PITFALLS-cyberdeck.md`, `VERSIONS`, `image/pack-image-rocknix.sh`.
 
+## Provenance: ghOSt is the project, handtop is a reference
+
+ghOSt is an independent project. It is **not** a fork of, and does not track,
+[handtop](https://github.com/junsulee119/handtop). handtop is a separate, working
+Debian build for the same Anbernic RG35XXH hardware, and it is used here as a
+reference: where ghOSt had a problem that handtop had already solved on real units —
+loop-free image assembly, screen-panel selection, provisioning files on the boot
+partition — the technique was adapted and credited instead of reinvented.
+
+Everything else is ghOSt's own: the toolset, launcher, stealth mode, rootfs stages,
+UI, boot layout and packaging.
+
 ## Licence
 
-MIT — see `LICENSE`. Parts are derived from [handtop](https://github.com/junsulee119/handtop)
-(MIT) and the code is built on ROCKNIX/KNULLI (GPL-2.0) and a set of tools cloned at
-build time; `NOTICE` lists every source, what was used and under which licence, and
-`LICENSES/` keeps the upstream notices verbatim.
+MIT — see `LICENSE`. A few files adapt code from handtop (MIT); the image also ships
+ROCKNIX/KNULLI builds (GPL-2.0) and tools cloned at build time. `NOTICE` lists every
+source, what was used and under which licence, and `LICENSES/` keeps the upstream
+notices verbatim.
 
 ## Build (local)
 

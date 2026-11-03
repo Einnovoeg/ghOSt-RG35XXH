@@ -1,8 +1,9 @@
 ghOSt — third-party notices
 ===========================
 
-ghOSt is distributed under the MIT licence (see LICENSE). Parts of it are
-derived from, or built on top of, the projects below. Their notices are kept
+ghOSt is an independent project, not a fork of any project listed here. A few of
+its files adapt code or techniques from them — handtop in particular is a separate,
+working build for the same hardware, used as a reference — and those notices are kept
 here and in LICENSES/ so every copy of this source tree carries them.
 
 1. handtop — https://github.com/junsulee119/handtop

@@ -7,6 +7,9 @@ set -e
 
 G=/sys/kernel/config/usb_gadget/rg35xxh
 FFS=/dev/ffs-mtp
+# Debian ships umtprd in /usr/bin; keep /usr/local/bin working for images that
+# were built before the package was installed.
+UMTPRD="${UMTPRD:-$(command -v umtprd || echo /usr/local/bin/umtprd)}"
 WITH_ETH="${WITH_ETH:-0}"   # set WITH_ETH=1 to also include ECM
 
 # --- teardown previous ---
@@ -49,7 +52,7 @@ mkdir -p "$G/functions/ffs.mtp"
 # --- mount FFS, start umtprd, wait for endpoints ---
 mkdir -p "$FFS"
 mount -t functionfs mtp "$FFS"
-nohup /usr/local/bin/umtprd -conf /etc/umtprd/umtprd.conf > /var/log/umtprd.log 2>&1 &
+nohup "$UMTPRD" -conf /etc/umtprd/umtprd.conf > /var/log/umtprd.log 2>&1 &
 echo $! > /run/umtprd.pid
 for i in 1 2 3 4 5 6 7 8 9 10; do
     [ -e "$FFS/ep1" ] && break

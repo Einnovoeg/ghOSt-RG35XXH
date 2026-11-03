@@ -773,6 +773,7 @@ install_gui() {
         libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev \
         python3-sdl2 python3-evdev python3-psutil \
         python3-pil \
+        umtprd \
         mangohud \
         gamescope || warn "Some GUI packages unavailable, continuing..."
 

@@ -1365,8 +1365,12 @@ install_gaming() {
     # Console-first pillar: mGBA alone is the stealth emulator, so give the Games
     # menu a general emulator and the cores the H700 emulates at full speed.
     log "Installing RetroArch and libretro cores..."
-    $APT retroarch libretro-gambatte libretro-snes9x libretro-genesisplusgx || \
-        warn "RetroArch is not installable from the configured repositories"
+    # retroarch and the Game Boy core are in main; the SNES and Genesis cores are
+    # in non-free, which the sources list above enables. Install them separately so
+    # a non-free hiccup cannot take the frontend with it.
+    $APT retroarch libretro-gambatte || warn "RetroArch is not installable from the configured repositories"
+    $APT libretro-snes9x libretro-genesisplusgx || \
+        warn "non-free libretro cores unavailable; RetroArch keeps the Game Boy core only"
 
     if [[ "$INCLUDE_PORTMASTER" == "true" ]]; then
         log "Installing PortMaster..."

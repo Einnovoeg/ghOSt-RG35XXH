@@ -145,6 +145,7 @@ MENU_TEMPLATE = [
         "icon": "🎮",
         "color": "peach",
         "items": [
+            {"label": "RetroArch",      "cmd": "retroarch",                          "icon": "🕹️", "requires": {"commands": ["retroarch"]}},
             {"label": "PortMaster",     "cmd": "/opt/portmaster/PortMaster.sh",      "icon": "🎮", "requires": {"paths": ["/opt/portmaster/PortMaster.sh"]}},
             {"label": "DOSBox-X",       "cmd": "dosbox-x /opt/ghost/dosbox/ghost.conf", "icon": "💾", "requires": {"commands": ["dosbox-x"]}},
             {"label": "Rockbox",        "cmd": "/opt/portmaster/ports/Rockbox/Rockbox.sh", "icon": "🎵", "requires": {"paths": ["/opt/portmaster/ports/Rockbox/Rockbox.sh"]}},

@@ -25,7 +25,7 @@ print_banner() {
  ██║   ██║██╔══██║██║   ██║╚════██║   ██║
  ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║
   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
-  Handheld Security and Signal Terminal
+  Gaming, Hacking Operating System Terminal
   Docker Build Environment
 EOF
     echo -e "${NC}"

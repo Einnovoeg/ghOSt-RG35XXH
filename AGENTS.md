@@ -9,6 +9,8 @@ ghOSt is a custom Debian Trixie ARM64 image for the Anbernic RG35XXH. The goal i
 
 ### 2. What has been done
 
+- Documentation and build metadata realigned to the five-pillar vision: the full name (Gaming, Hacking Operating System Terminal) appears in `README.md`, `Dockerfile`, `build.sh`, `docker-entrypoint.sh`, `firstboot/`, `config.sh` and the DOSBox banner, a stray chat transcript that had been pasted above the `Dockerfile` header is gone, and `tests/static-checks.sh` now fails on any of that drifting again.
+
 - The build now reliably gets through kernel staging, rootfs bootstrap, overlay application, and in-chroot configuration.
 - The boot payload is extracted from the official ROCKNIX release image, not built. The real image layout, confirmed in CI, is: p1 = FAT (2 GiB) holding `KERNEL`, `device_trees/`, `overlays/`, `extlinux/`, `SYSTEM` and `SYSTEM.md5`; p2 = a 32 MiB ext4 that is *not* the root filesystem; the root filesystem is the `SYSTEM` squashfs, with modules and firmware under `usr/lib`. U-Boot is not a file at all — it lives in the raw sectors from 8 KiB that the boot ROM reads. `ghOSt` renames the kernel to `Image` and keeps ROCKNIX's U-Boot bytes, so the boot chain that boots on hardware is preserved byte for byte.
 - The earlier cached-rootfs failures were fixed in the build scripts:
@@ -99,7 +101,19 @@ CI runs it as the `static` job before the long build. Run it as root to get the 
 
 ## Project Overview
 
-**ghOSt** (Handheld Security and Signal Terminal) is a custom Linux distribution for the **Anbernic RG35XXH** handheld gaming device. It transforms the stock Anbernic firmware into a portable security research, signal intelligence, and wireless tooling platform.
+**ghOSt** (Gaming, Hacking Operating System Terminal) is a custom Linux distribution for the **Anbernic RG35XXH** handheld gaming device. It transforms the stock Anbernic firmware into a portable security research, signal intelligence, and wireless tooling platform.
+
+One Debian Trixie ARM64 rootfs carries five pillars, documented with their honest limits in `README.md`:
+
+| Pillar | Source idea | In ghOSt |
+|---|---|---|
+| Kali Linux | offensive security | `kali-rolling` repo at priority 100 (stage 9) |
+| ParrotOS | OpSec and anonymity | MAC randomisation, Tor/i2pd, proxychains, WireGuard/OpenVPN, `stealthd` |
+| BlackArch | modular recon tooling | everything outside Debian under `/opt/ghost/` |
+| DragonOS | RF and SDR | rtl-sdr family, SDR++ Brown, SoapySDR, udev rules, dongle drivers |
+| Bazzite | console-first UX | gamepad launcher, RetroArch + libretro cores, mGBA stealth mode, PortMaster/DOSBox-X optional |
+
+`gnuradio` is deliberately absent (does not fit 1GB RAM), `anonsurf` is deliberately absent (rewrites apt sources), and there is no BlackArch repository.
 
 **Target hardware:** Anbernic RG35XXH (Allwinner H700, 1GB RAM, 640×480 display)
 **Base OS:** Debian Trixie ARM64

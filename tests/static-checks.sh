@@ -138,6 +138,27 @@ grep -q 'fake-hwclock' rootfs/build-rootfs.sh \
     && ok "fake-hwclock carries the clock across reboots" \
     || bad "fake-hwclock missing: the clock restarts at the epoch every boot"
 
+# project identity: the full name and the five pillars must not drift again
+for f in README.md Dockerfile build.sh docker-entrypoint.sh config.sh; do
+    if grep -q "Gaming, Hacking Operating System Terminal" "$f"; then
+        ok "$f carries the full project name"
+    else
+        bad "$f uses the old short project name"
+    fi
+done
+for pillar in Kali ParrotOS BlackArch DragonOS Bazzite; do
+    if grep -q "$pillar" README.md; then
+        ok "README documents the $pillar pillar"
+    else
+        bad "README omits the $pillar pillar"
+    fi
+done
+if head -1 Dockerfile | grep -q '^#'; then
+    ok "Dockerfile starts with a comment header"
+else
+    bad "Dockerfile starts with prose (a chat artefact)"
+fi
+
 # every interactive launcher entry opens foot, and writing foot.ini installing nothing
 if grep -qE '^[[:space:]]+foot foot-terminfo' rootfs/build-rootfs.sh; then
     ok "foot terminal is installed for the launcher entries"

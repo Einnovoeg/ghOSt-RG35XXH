@@ -1,5 +1,3 @@
-You are completely right—I stripped out key ghOSt-specific sections (the ASCII header, the armel cross-compilers, script permission targets for stealthd/launcher/hey/firstboot, and the config.sh build directory override).
-Here is your exact original Dockerfile with all original sections, comments, permissions, and script overrides intact, adding only bmap-tools to the package manager and updating the base image tag to ensure build reliability:
 # =============================================================================
 #  ██████╗ ██╗  ██╗ ██████╗ ███████╗████████╗
 # ██╔════╝ ██║  ██║██╔═══██╗██╔════╝╚══██╔══╝
@@ -7,7 +5,8 @@ Here is your exact original Dockerfile with all original sections, comments, per
 # ██║   ██║██╔══██║██║   ██║╚════██║   ██║
 # ╚██████╔╝██║  ██║╚██████╔╝███████╗   ██║
 #  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
-# Handheld Security and Signal Terminal
+# Gaming, Hacking Operating System Terminal
+# Kali · ParrotOS · BlackArch · DragonOS · Bazzite on one Debian Trixie ARM64 rootfs
 # Build Container — Ubuntu 24.04 x86_64
 # =============================================================================
 
@@ -154,7 +153,7 @@ WORKDIR /ghost
 
 # =============================================================================
 # VOLUME: output directory mounted from host
-# The finished .img.gz will appear here
+# The finished .img.xz (and SHA256SUMS) will appear here
 # =============================================================================
 VOLUME ["/opt/ghost-build/output"]
 

@@ -20,7 +20,7 @@ cat << 'BANNER'
  ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║
   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
 
-  Handheld Security and Signal Terminal
+  Gaming, Hacking Operating System Terminal
   First Boot Setup
 BANNER
 

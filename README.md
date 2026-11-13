@@ -1,6 +1,6 @@
-# ghOSt — Handheld Security and Signal Terminal
+# ghOSt — Gaming, Hacking Operating System Terminal
 
-ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default build prioritizes signal intelligence, recon, wireless tooling, stealth workflows, and low-RAM operation on a 1GB ARM device. Gaming and compatibility layers remain optional extras, not the center of the image.
+ghOSt is a cyberdeck build for the Anbernic RG35XXH: one Debian Trixie ARM64 image that carries offensive security, OpSec, recon tooling, software-defined radio and a console-first gamepad UI, on hardware with a 1GHz quad-core SoC and 1GB of RAM. The security stack is the default focus; the gaming layer is part of the image because a handheld you cannot hand to a kid is a handheld that gets left at home.
 
 > **Boot fix (2026-09):** default `BOOT_FLOW=rocknix` ports the proven
 > [rg35xxh-cyberdeck](https://github.com/Einnovoeg/rg35xxh-cyberdeck) boot chain
@@ -9,6 +9,27 @@ ghOSt is a security-first handheld distro for the Anbernic RG35XXH. The default 
 > XFCE UI (LightDM autologin, joy2mouse, WiFi watchdog, MTP, battery widget).
 > Legacy KNULLI 4.9 + GPT (`BOOT_FLOW=legacy`) is kept for experiments only.
 > See `docs/PITFALLS-cyberdeck.md`, `VERSIONS`, `image/pack-image-rocknix.sh`.
+
+## The five pillars
+
+ghOSt is not a re-spin of another distribution. It is a single Debian rootfs that
+takes the defining idea of five specialist distributions and implements it for a
+1GB handheld:
+
+| Pillar | Taken from | How it appears in ghOSt |
+|---|---|---|
+| Offensive security | Kali Linux | `kali-rolling` repo pinned to low priority: nmap, masscan, rustscan, metasploit, sqlmap, hydra, aircrack-ng, hcxdumptool, bettercap, responder, wifite, airgeddon |
+| OpSec and anonymity | ParrotOS | NetworkManager MAC randomisation, `macchanger`, Tor + `torsocks`, i2pd, proxychains4, WireGuard/OpenVPN, `dnscrypt-proxy`, `secure-delete`, stealth mode in `stealthd` |
+| Modular recon tooling | BlackArch | everything that is not a Debian package lives under `/opt/ghost/` — INTERCEPT, CyberChef, airgeddon, SpiderFoot and theHarvester in their own venvs — and is reached from the launcher |
+| RF and SDR | DragonOS | rtl-sdr, rtl_433, dump1090, multimon-ng, direwolf, fldigi, inspectrum, kalibrate-rtl, SDR++ Brown, `soapysdr-tools`, plus in-kernel drivers for RTL-SDR, HackRF and Airspy dongles |
+| Console-first handheld UX | Bazzite | gamepad-driven Cage/XFCE launcher, RetroArch with libretro cores, mGBA for stealth mode, optional PortMaster and DOSBox-X, joy2mouse and handheld-daemon |
+
+Deliberate gaps, so the table is not read as more than it is: `gnuradio` is not
+installed (its dependency chain does not fit a 1GB device — the SDR pillar uses the
+lighter rtl-sdr, SoapySDR and SDR++ stack), `anonsurf` is not installed because its
+installer rewrites apt sources, `RetroArch` cores are limited to the GBA/SNES/Genesis
+set that the H700 runs at full speed, and there is no BlackArch repository: BlackArch
+contributes the layout and tooling style, not packages.
 
 ## Kernel and boot payload
 
@@ -217,6 +238,10 @@ If the project is useful, support it here: [buymeacoffee.com/einnovoeg](https://
 
 ## License and Legal
 
-The repository license and third-party attribution still need a full compliance pass. Until that is completed, treat the bundled third-party tools as retaining their own upstream licenses and attribution requirements.
+ghOSt's own code is MIT — see `LICENSE`. The image also carries GPL-2.0 ROCKNIX
+boot components, MIT-licensed work ported from other projects, and tools cloned at
+build time; `NOTICE` records every source, what was used and under which licence, and
+`LICENSES/` keeps the upstream notices verbatim. Tools installed from Debian and Kali
+repositories keep their own upstream licences.
 
 Use ghOSt only for authorized security research, lab work, CTFs, and education.

@@ -1362,6 +1362,12 @@ install_gaming() {
         mkdir -p "$ROOTFS_DIR/home/$GHOST_USER/.stealth/roms"
     fi
 
+    # Console-first pillar: mGBA alone is the stealth emulator, so give the Games
+    # menu a general emulator and the cores the H700 emulates at full speed.
+    log "Installing RetroArch and libretro cores..."
+    $APT retroarch libretro-gambatte libretro-snes9x libretro-genesisplusgx || \
+        warn "RetroArch is not installable from the configured repositories"
+
     if [[ "$INCLUDE_PORTMASTER" == "true" ]]; then
         log "Installing PortMaster..."
         local portmaster_url=""

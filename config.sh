@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # =============================================================================
 # ghOSt Build Configuration
+# Gaming, Hacking Operating System Terminal — Anbernic RG35XXH (Allwinner H700)
+# One Debian Trixie ARM64 rootfs carrying five pillars:
+#   Kali      — offensive security and wireless auditing packages
+#   ParrotOS  — MAC randomisation, Tor/i2pd, proxychains, WireGuard/OpenVPN
+#   BlackArch — source-built and scripted tooling under /opt/ghost/
+#   DragonOS  — SDR drivers, udev rules, decoders, SDR++/inspectrum
+#   Bazzite   — console-first gamepad launcher, RetroArch, mGBA, PortMaster
 # Edit this file to customize your build
 # =============================================================================
 

@@ -7,7 +7,7 @@
 # ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║
 #  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
 #
-# Handheld Security and Signal Terminal
+# Gaming, Hacking Operating System Terminal
 # Build Script v1.0
 # Target: Anbernic RG35XXH (Allwinner H700)
 # =============================================================================
@@ -458,7 +458,7 @@ main() {
  ██║   ██║██╔══██║██║   ██║╚════██║   ██║
  ╚██████╔╝██║  ██║╚██████╔╝███████║   ██║
   ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝   ╚═╝
-  Handheld Security and Signal Terminal
+  Gaming, Hacking Operating System Terminal
 EOF
     echo -e "${NC}"
     echo -e "  Device:  ${BOLD}${DEVICE_TARGET}${NC}"

@@ -606,8 +606,10 @@ EOF
 
 # =============================================================================
 # FSTAB (BOOT_FLOW-aware: LABELs for rocknix MBR, UUIDs for legacy GPT)
-# image/pack-image-rocknix.sh rewrites fstab again at pack time, so this is
-# a safe default for both flows. Legacy assemble_image replaces ROOT/SWAP_UUID.
+# The packer does not rewrite this file, so these entries must match the labels
+# image/pack-image-rocknix.sh writes (config.sh BOOT_LABEL/ROOT_LABEL).
+# tests/boot-chain-test.sh fails when they drift apart. Legacy assemble_image
+# replaces ROOT/SWAP_UUID for the experimental GPT flow.
 # =============================================================================
 log "Writing fstab..."
 # The shipped layout is MBR with LABEL=rootfs/BOOT. Only the experimental

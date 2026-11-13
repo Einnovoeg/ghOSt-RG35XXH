@@ -12,6 +12,14 @@ setenv bootargs "root=/dev/mmcblk0p2 rw rootwait \
 
 # dtb.img is picked at boot by ghost-panel (regular or rev6 screen panel);
 # the per-panel copies are dtb-regular.img / dtb-rev6.img on this partition.
-fatload mmc 0:1 0x44000000 Image
-fatload mmc 0:1 0x4FA00000 dtb.img
-booti 0x44000000 - 0x4FA00000
+# The H700 has two SD slots and the OS card can enumerate as mmc 0 or mmc 1,
+# so try the internal slot first and fall back to the second one. root= is a
+# PARTUUID, so the kernel mounts the right partition either way.
+if fatload mmc 0:1 0x44000000 Image; then
+  fatload mmc 0:1 0x4FA00000 dtb.img
+  booti 0x44000000 - 0x4FA00000
+else
+  fatload mmc 1:1 0x44000000 Image
+  fatload mmc 1:1 0x4FA00000 dtb.img
+  booti 0x44000000 - 0x4FA00000
+fi

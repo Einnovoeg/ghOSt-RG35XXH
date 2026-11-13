@@ -163,6 +163,11 @@ PARTUUID_ROOT="$(printf '%08x' "$((DISK_ID))")-02"
 # and mmcblk numbering can change, so root=/dev/mmcblk0p2 is not reliable.
 sed "s|root=/dev/mmcblk0p2|root=PARTUUID=${PARTUUID_ROOT}|" \
     "$BOOT_CMD" > "$BOOTDIR/boot.cmd"
+# boot.cmd is the placeholder the substitution above targets. If that string ever
+# disappears the sed silently does nothing and the image boots with the hardcoded
+# root device instead, which only fails on hardware.
+grep -q "root=PARTUUID=${PARTUUID_ROOT}" "$BOOTDIR/boot.cmd" || \
+    die "boot.cmd does not contain root=/dev/mmcblk0p2, so no PARTUUID substitution was made"
 # boot.scr must be compiled here: the committed blob predates the dtb.img layout,
 # and shipping it would make U-Boot look for a DTB that no longer exists.
 command -v mkimage >/dev/null 2>&1 || \

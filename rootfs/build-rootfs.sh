@@ -48,45 +48,43 @@ mkdir_rootfs_parent() {
 }
 
 ensure_arm64_loader_link() {
-    local loader_link="$ROOTFS_DIR/lib/ld-linux-aarch64.so.1"
-    local loader_target="../usr/lib/ld-linux-aarch64.so.1"
-    local multiarch_link="$ROOTFS_DIR/lib/aarch64-linux-gnu"
-    local multiarch_target="../usr/lib/aarch64-linux-gnu"
-    local current_target=""
+    local rootfs="$ROOTFS_DIR"
+    local loader_path=""
+    local candidate=""
 
-    # qemu-user expects the canonical ARM64 loader path to exist inside the
-    # rootfs. Some cached rootfs states only retain the usr/lib location.
-    [[ -e "$ROOTFS_DIR/usr/lib/ld-linux-aarch64.so.1" ]] || return 0
-
-    mkdir -p "$ROOTFS_DIR/lib"
-
-    if [[ -L "$loader_link" ]]; then
-        current_target=$(readlink "$loader_link" || true)
-        if [[ "$current_target" != "$loader_target" ]] && \
-           [[ "$current_target" != "/usr/lib/ld-linux-aarch64.so.1" ]]; then
-            rm -f "$loader_link"
+    # qemu-user opens /lib/ld-linux-aarch64.so.1 by name, but different rootfs
+    # states keep the loader in different places.
+    for candidate in \
+        /usr/lib/ld-linux-aarch64.so.1 \
+        /usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 \
+        /lib/aarch64-linux-gnu/ld-linux-aarch64.so.1; do
+        if [[ -e "$rootfs$candidate" ]]; then
+            loader_path="$candidate"
+            break
         fi
+    done
+
+    if [[ -z "$loader_path" ]]; then
+        warn "no ARM64 loader in the rootfs; leaving the lib layout untouched"
+        return 0
     fi
 
-    if [[ ! -e "$loader_link" ]]; then
-        ln -s "$loader_target" "$loader_link"
+    mkdir -p "$rootfs/lib"
+
+    # Links stay relative, the way Debian's own usrmerge does it.
+    if [[ ! -e "$rootfs/lib/ld-linux-aarch64.so.1" ]]; then
+        ln -s "../${loader_path#/}" "$rootfs/lib/ld-linux-aarch64.so.1" || \
+            warn "could not link /lib/ld-linux-aarch64.so.1"
     fi
 
-    # PAM and other runtime loaders still resolve modules through /lib on the
-    # target system. Keep the multiarch libdir reachable from the canonical
-    # location even when the debootstrap cache lost the usrmerge symlink.
-    if [[ -L "$multiarch_link" ]]; then
-        current_target=$(readlink "$multiarch_link" || true)
-        if [[ "$current_target" != "$multiarch_target" ]] && \
-           [[ "$current_target" != "/usr/lib/aarch64-linux-gnu" ]]; then
-            rm -f "$multiarch_link"
-        fi
-    elif [[ -d "$multiarch_link" ]] && [[ ! -e "$multiarch_link/ld-linux-aarch64.so.1" ]]; then
-        rm -rf "$multiarch_link"
-    fi
-
-    if [[ ! -e "$multiarch_link" ]] && [[ -d "$ROOTFS_DIR/usr/lib/aarch64-linux-gnu" ]]; then
-        ln -s "$multiarch_target" "$multiarch_link"
+    # /lib/aarch64-linux-gnu has to resolve at runtime. Create it only when it is
+    # missing, and never remove anything here: when /lib is a usrmerge symlink to
+    # usr/lib this path *is* the real /usr/lib/aarch64-linux-gnu, so deleting it
+    # destroyed the cached rootfs and every later chroot died with exit 255.
+    if [[ ! -e "$rootfs/lib/aarch64-linux-gnu" ]] && \
+       [[ -d "$rootfs/usr/lib/aarch64-linux-gnu" ]]; then
+        ln -s ../usr/lib/aarch64-linux-gnu "$rootfs/lib/aarch64-linux-gnu" || \
+            warn "could not link /lib/aarch64-linux-gnu"
     fi
 }
 
@@ -196,7 +194,11 @@ repair_rootfs_identities() {
     # Restore Debian's packaged passwd/group entries, then recreate any
     # package-managed service users from sysusers.d (for example messagebus).
     $CHROOT /usr/sbin/update-passwd || true
-    systemd-sysusers --root="$ROOTFS_DIR" || true
+    # The host's systemd-sysusers cannot parse newer modifiers such as `u!`, so
+    # the rootfs' own copy runs too; the host call stays as a fallback for the
+    # case where the rootfs package is not installed yet.
+    systemd-sysusers --root="$ROOTFS_DIR" >/dev/null 2>&1 || true
+    $CHROOT sh -c 'command -v systemd-sysusers >/dev/null && systemd-sysusers' >/dev/null 2>&1 || true
 
     # Some packages install service users via sysusers.d but the cached rootfs
     # may still miss them after an interrupted build resume. Seed the critical
@@ -510,6 +512,17 @@ debootstrap_stage() {
 # =============================================================================
 recover_rootfs_state() {
     section "Recovering Cached Rootfs State"
+
+    # A cached rootfs can come back with the loader unlinked, and every chroot
+    # below then dies with exit 255 before printing anything useful. Repair the
+    # links and prove the chroot can run before relying on it.
+    ensure_arm64_loader_link
+    if ! $CHROOT true >/dev/null 2>&1; then
+        warn "the ARM64 rootfs cannot execute under qemu; lib layout follows"
+        ls -l "$ROOTFS_DIR/lib" 2>/dev/null | head -20 || true
+        ls -l "$ROOTFS_DIR/usr/lib/aarch64-linux-gnu" 2>/dev/null | head -20 || true
+        return 1
+    fi
 
     # Repeated Docker resumes can interrupt apt/dpkg in the cached rootfs.
     # Clear stale locks and repair package state before the next install stage.

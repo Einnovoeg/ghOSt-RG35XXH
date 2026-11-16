@@ -97,7 +97,9 @@ garbled screen or missing Wi-Fi can be diagnosed from Windows/macOS.
 3. Actions → `build` → Run workflow (choose `boot_flow` / `ui_mode`).
 
 Workflow: `.github/workflows/build.yml` (cache keyed on `VERSIONS`; kernel
-rebuild only when pins change). Artifacts retained 14 days.
+rebuild only when pins change). Artifacts retained 14 days. The build job runs on a
+native ARM64 runner (`ubuntu-24.04-arm`) because the aarch64 chroot takes about seven
+hours under qemu emulation on x86_64 and a hosted job is capped at six.
 
 ## Host Requirements
 

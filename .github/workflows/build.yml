@@ -41,7 +41,13 @@ jobs:
 
   build:
     needs: static
-    runs-on: ubuntu-24.04
+    # Native ARM64: the rootfs is an aarch64 chroot, and under qemu emulation on an
+    # x86_64 runner the 17 package/source stages took ~7 hours — past the 6-hour
+    # per-job limit, so the build was cancelled before the packer ever ran. On a
+    # native arm64 runner the same chroot runs without emulation and finishes in
+    # well under an hour. The x86_64 cross-build path (./build.sh inside the
+    # Dockerfile) is unchanged and still works; it is just too slow for hosted CI.
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     env:
       BOOT_FLOW: ${{ inputs.boot_flow || 'rocknix' }}

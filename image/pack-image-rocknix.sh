@@ -173,6 +173,12 @@ if [[ -n "$INITRD_STASH" && -s "$INITRD_STASH" ]]; then
     cp "$INITRD_STASH" "$BOOTDIR/initrd.img"
     log "initramfs staged on the boot partition ($(du -h "$BOOTDIR/initrd.img" | cut -f1))"
 else
+    # The staged ROCKNIX kernel has its own initramfs, which mounts ROCKNIX's
+    # /flash + SYSTEM. Shipping that with no initrd of our own produces an image
+    # that looks right, flashes fine, and never reaches ghOSt's root filesystem.
+    if [[ -f "$KERNEL_BOOT/EMBEDDED-INITRAMFS" ]]; then
+        die "no initramfs in the rootfs but the kernel has an embedded one; refusing to ship an image that cannot mount its own root"
+    fi
     warn "no initramfs: the kernel will use ROCKNIX's embedded one and miss this rootfs"
 fi
 

@@ -172,14 +172,16 @@ done < <(find "$BOOT_SRC" -type f -size +1M 2>/dev/null | sort)
 if [[ -n "$SQUASH" ]]; then
     log "squashfs root filesystem: $(basename "$SQUASH") ($(du -h "$SQUASH" | cut -f1))"
     if command -v unsquashfs >/dev/null 2>&1; then
-        mkdir -p "$WORK/sq"
-        # Debian merges /usr, so modules and firmware usually live under
-        # usr/lib; ask for both spellings and use whichever the image has.
-        unsquashfs -q -d "$WORK/sq" "$SQUASH" \
-            lib/modules usr/lib/modules lib/firmware usr/lib/firmware \
-            usr/share/bootloader \
-            > "$WORK/unsquash.log" 2>&1 || warn "unsquashfs reported: $(tail -2 "$WORK/unsquash.log" | tr '\n' ' ')"
+        # Extract the whole system image: filtering by path silently produced
+        # nothing (unsquashfs reports the missing paths but still exits 0), which
+        # is how a release with real modules staged zero of them. 1.2GB and a
+        # minute of I/O is cheaper than shipping a kernel with no drivers.
+        rm -rf "$WORK/sq"
+        unsquashfs -q -f -d "$WORK/sq" "$SQUASH" \
+            > "$WORK/unsquash.log" 2>&1 || \
+            warn "unsquashfs reported: $(tail -2 "$WORK/unsquash.log" | tr '\n' ' ')"
         ROOT_SRC="$WORK/sq"
+        log "squashfs contents: $(find "$WORK/sq/lib/modules" "$WORK/sq/usr/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ') module tree(s), $(find "$WORK/sq/lib/firmware" "$WORK/sq/usr/lib/firmware" -type f 2>/dev/null | wc -l | tr -d ' ') firmware file(s)"
     else
         warn "unsquashfs is missing (apt install squashfs-tools); cannot read modules from the squashfs"
     fi
@@ -265,7 +267,9 @@ for f in "$ROOT_SRC/lib/firmware" "$ROOT_SRC/usr/lib/firmware"; do
     rsync -a "$f/" "$OVERLAY/lib/firmware/"
     fw=$(( fw + 1 ))
 done
-(( mods > 0 )) || warn "no kernel modules found in the release root filesystem"
+# Without the matching module tree no driver loads: no Wi-Fi, no Bluetooth, no
+# joypad, no SDR. An image like that is not worth building, so stop here.
+(( mods > 0 )) || error "no kernel modules in the release payload — check the squashfs layout in $WORK/unsquash.log (and that squashfs-tools is installed)"
 (( fw > 0 )) || warn "no firmware found in the release root filesystem"
 log "staged $mods module tree(s) and firmware from $fw path(s)"
 

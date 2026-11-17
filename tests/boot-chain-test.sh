@@ -78,6 +78,16 @@ if grep -q 'fatload mmc 0:1 0x48000000 initrd.img' "$BOOTCMD" && \
 else
     bad "boot.cmd does not hand an initramfs to the kernel"
 fi
+if grep -q 'unsquashfs -q -f -d' "$ROOT/kernel/fetch-rocknix-boot.sh"; then
+    ok "the boot payload extracts the whole SYSTEM image, not a path filter"
+else
+    bad "the payload extractor filters squashfs paths and can stage zero modules"
+fi
+if grep -q 'refusing to ship an image that cannot mount its own root' "$PACK"; then
+    ok "packer refuses to ship a kernel whose embedded initramfs would win"
+else
+    bad "packer ships a kernel with an embedded initramfs and no initrd"
+fi
 if grep -q 'mkinitramfs -o /boot/initrd.img' "$CONFIGURE"; then
     ok "configure.sh builds a Debian initramfs for the staged kernel"
 else

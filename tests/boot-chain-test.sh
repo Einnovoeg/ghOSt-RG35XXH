@@ -64,10 +64,29 @@ else
     bad "kernel and DTB would be loaded at the same address"
 fi
 
-if grep -qE 'booti 0x[0-9A-Fa-f]+ - 0x[0-9A-Fa-f]+' "$BOOTCMD"; then
+if grep -qE 'booti 0x[0-9A-Fa-f]+ (0x[0-9A-Fa-f]+|-) 0x[0-9A-Fa-f]+' "$BOOTCMD"; then
     ok "booti is given an explicit DTB address"
 else
     bad "booti has no DTB argument"
+fi
+
+# The ROCKNIX kernel's embedded initramfs mounts ROCKNIX's SYSTEM squashfs, so the
+# image has to supply its own and hand it to booti, or the root= never gets used.
+if grep -q 'fatload mmc 0:1 0x48000000 initrd.img' "$BOOTCMD" && \
+   grep -qE 'booti 0x[0-9A-Fa-f]+ 0x48000000 0x[0-9A-Fa-f]+' "$BOOTCMD"; then
+    ok "boot.cmd loads initrd.img and passes it to booti"
+else
+    bad "boot.cmd does not hand an initramfs to the kernel"
+fi
+if grep -q 'mkinitramfs -o /boot/initrd.img' "$CONFIGURE"; then
+    ok "configure.sh builds a Debian initramfs for the staged kernel"
+else
+    bad "nothing builds an initramfs, so the embedded ROCKNIX one wins"
+fi
+if grep -q 'INITRD_STASH' "$PACK" && grep -q 'BOOTDIR/initrd.img' "$PACK"; then
+    ok "packer rescues and ships the initramfs instead of deleting it with /boot"
+else
+    bad "packer wipes /boot without preserving initrd.img"
 fi
 
 # --- 2. Packer: kernel, DTBs, boot.scr ------------------------------------

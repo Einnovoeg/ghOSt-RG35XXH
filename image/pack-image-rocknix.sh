@@ -112,6 +112,14 @@ if mountpoint -q "$ROOTFS/boot" 2>/dev/null; then
     die "$ROOTFS/boot is still mounted — unmount it before packing"
 fi
 mkdir -p "$ROOTFS/boot"
+# The initramfs is built into the rootfs /boot by configure.sh (it needs the
+# staged modules). Keep it while the rest of /boot is cleared, then ship it on
+# the FAT partition instead.
+INITRD_STASH=""
+if [[ -f "$ROOTFS/boot/initrd.img" ]]; then
+    INITRD_STASH="$(mktemp)"
+    mv "$ROOTFS/boot/initrd.img" "$INITRD_STASH"
+fi
 find "$ROOTFS/boot" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 # --- sizes -------------------------------------------------------------------
@@ -135,7 +143,13 @@ IMG="$DIST/ghOSt-RG35XXH-${GHOST_VERSION:-1.0.0}-${GIT_SHA}.img"
 log "rootfs ${ROOT_USED_MIB}MiB -> root partition ${ROOT_SIZE_MIB}MiB, image ${TOTAL_MIB}MiB"
 
 PARTS="$(mktemp -d)"
-cleanup() { rm -rf "$PARTS"; }
+cleanup() {
+    rm -rf "$PARTS"
+    if [[ -n "${INITRD_STASH:-}" ]]; then
+        rm -f "$INITRD_STASH"
+    fi
+    return 0
+}
 trap cleanup EXIT
 
 # --- boot partition (FAT32) --------------------------------------------------
@@ -151,6 +165,15 @@ if [[ -f "$DTB_REV6_FILE" ]]; then
     cp "$DTB_REV6_FILE" "$BOOTDIR/dtb-rev6.img"
 else
     warn "rev6 DTB not found ($DTB_REV6_FILE) — only regular-panel units will work"
+fi
+
+# boot.cmd loads initrd.img and passes it to booti. Without it the kernel keeps
+# ROCKNIX's embedded initramfs and looks for /flash + SYSTEM instead of our root.
+if [[ -n "$INITRD_STASH" && -s "$INITRD_STASH" ]]; then
+    cp "$INITRD_STASH" "$BOOTDIR/initrd.img"
+    log "initramfs staged on the boot partition ($(du -h "$BOOTDIR/initrd.img" | cut -f1))"
+else
+    warn "no initramfs: the kernel will use ROCKNIX's embedded one and miss this rootfs"
 fi
 
 # Files the owner may edit from a PC; CRLF so Windows Notepad shows them correctly.

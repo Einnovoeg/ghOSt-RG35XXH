@@ -20,12 +20,14 @@ purge_foreign_kernel_stack() {
     local removable_pkgs=()
 
     # ghOSt ships a staged KNULLI boot chain and module tree, so distro kernel
-    # packages and initramfs hooks are both unnecessary and actively harmful.
-    # If a cached rootfs accidentally picked up a Debian or Raspberry Pi kernel,
-    # purge it here before later package hooks try to build an unusable initrd.
+    # packages are both unnecessary and actively harmful: if a cached rootfs
+    # picked up a Debian or Raspberry Pi kernel, purge it before later hooks try
+    # to build an initrd for it. initramfs-tools and busybox stay, because
+    # configure.sh now builds an initramfs for the staged ROCKNIX kernel — the
+    # embedded one in that kernel mounts ROCKNIX's SYSTEM squashfs, not this root.
     mapfile -t removable_pkgs < <(
         dpkg-query -W -f='${Package}\n' 2>/dev/null | \
-            grep -E '^(linux-image-|initramfs-tools(|-core)|klibc-utils|busybox)$' || true
+            grep -E '^(linux-image-)' || true
     )
 
     if [ "${#removable_pkgs[@]}" -eq 0 ]; then
@@ -666,6 +668,31 @@ if command -v depmod >/dev/null 2>&1; then
     [ "$module_trees" -gt 0 ] || warn "no trees under /lib/modules — drivers will be missing"
 else
     warn "depmod not available; module dependencies will not be indexed"
+fi
+
+# --- initramfs for the staged kernel --------------------------------------
+# The ROCKNIX kernel carries an embedded initramfs that mounts ROCKNIX's /flash
+# and SYSTEM squashfs, which is not this image. An initramfs on the boot
+# partition is unpacked after the embedded one, so its /init wins and mounts
+# root=PARTUUID=<disk>-02 instead. Without it the kernel looks for a filesystem
+# that is not on the card and the handheld stops before userspace.
+KVER="$(ls -1 /lib/modules 2>/dev/null | head -1 || true)"
+if [ -n "$KVER" ] && [ -d "/lib/modules/$KVER" ]; then
+    if ! command -v mkinitramfs >/dev/null 2>&1; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            initramfs-tools-core busybox >/dev/null 2>&1 || warn "initramfs-tools not installable"
+    fi
+    if command -v mkinitramfs >/dev/null 2>&1; then
+        mkdir -p /boot
+        rm -f /boot/initrd.img
+        mkinitramfs -o /boot/initrd.img "$KVER" >/dev/null 2>&1 || \
+            warn "mkinitramfs failed for $KVER"
+        if [ -s /boot/initrd.img ]; then
+            log "initramfs built for $KVER ($(du -h /boot/initrd.img | cut -f1))"
+        else
+            warn "no initramfs produced: the kernel will fall back to ROCKNIX's embedded one"
+        fi
+    fi
 fi
 
 # =============================================================================

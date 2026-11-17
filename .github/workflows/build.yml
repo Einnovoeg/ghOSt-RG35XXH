@@ -96,10 +96,14 @@ jobs:
         env:
           BOOT_FLOW: rocknix
 
-      - name: Compute checksums
+      # The packer already writes SHA256SUMS (it runs as root, so this step cannot
+      # overwrite that file — it only verifies it and hands ownership back for the
+      # upload).
+      - name: Verify checksums
         run: |
+          sudo chown -R "$(id -u):$(id -g)" build/output
           cd build/output
-          sha256sum *.img.xz *.bmap > SHA256SUMS || sha256sum *.img.xz > SHA256SUMS
+          sha256sum -c SHA256SUMS
           ls -lh
 
       - name: Upload artifacts

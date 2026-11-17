@@ -195,5 +195,23 @@ else
     bad "packer ships an unvalidated root filesystem"
 fi
 
+# A wrong or missing label is an unbootable image (fstab mounts / by label), so the
+# packer has to read the labels back out of the assembled image and refuse to ship.
+if grep -q 'blkid -p -O' "$PACK" && grep -q 'die "p2 at' "$PACK"; then
+    ok "packer reads the partition labels back from the assembled image"
+else
+    bad "packer does not verify the labels on the assembled image"
+fi
+if grep -q 'carries label' "$PACK"; then
+    ok "packer refuses a root filesystem whose label does not match fstab"
+else
+    bad "packer does not check the root filesystem label before assembly"
+fi
+if grep -q 'mdir -b -i' "$PACK" && grep -q 'which boot.scr loads' "$PACK"; then
+    ok "packer verifies the boot partition holds what boot.scr loads"
+else
+    bad "packer does not verify the boot partition contents after assembly"
+fi
+
 echo "boot-chain: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

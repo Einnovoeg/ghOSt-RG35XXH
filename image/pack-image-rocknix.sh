@@ -186,6 +186,13 @@ mkfs.ext4 -q -F -L "$ROOT_LABEL" -m 1 \
     -E root_owner=0:0,lazy_itable_init=0 \
     -d "$ROOTFS" "$PARTS/root.ext4" "${ROOT_SIZE_MIB}M"
 e2fsck -fn "$PARTS/root.ext4" >/dev/null || die "e2fsck found errors in root.ext4"
+# fstab mounts / by LABEL=$ROOT_LABEL, so a missing label is an unbootable image,
+# not a cosmetic detail.
+if command -v blkid >/dev/null 2>&1; then
+    built_label="$(blkid -o value -s LABEL "$PARTS/root.ext4" 2>/dev/null || true)"
+    [[ "$built_label" == "$ROOT_LABEL" ]] || \
+        die "root.ext4 carries label '$built_label', but fstab mounts LABEL=$ROOT_LABEL"
+fi
 
 # --- assemble ----------------------------------------------------------------
 log "assembling MBR image: u-boot @8KiB, p1 @${BOOT_START_MIB}MiB, p2 @${ROOT_START_MIB}MiB"
@@ -204,10 +211,29 @@ dd if="$PARTS/root.ext4" of="$IMG" bs=1M seek="$ROOT_START_MIB" conv=notrunc,spa
 
 # --- verify before shipping --------------------------------------------------
 sfdisk -l "$IMG" 2>/dev/null | tail -4
-ROOT_OFF=$(( ROOT_START_MIB * 1024 * 1024 ))
-if ! dd if="$IMG" bs=1M skip="$ROOT_START_MIB" count=4 status=none | \
-     grep -qa "$ROOT_LABEL"; then
-    warn "could not read ext4 label back from offset $ROOT_OFF (non-fatal)"
+
+# Read the filesystem labels back out of the assembled image, at the offsets the
+# partition table declares. boot.scr uses a PARTUUID and fstab uses these labels,
+# so both have to survive the dd into place.
+if command -v blkid >/dev/null 2>&1; then
+    boot_label="$(blkid -p -O $(( BOOT_START_MIB * 1024 * 1024 )) -o value -s LABEL "$IMG" 2>/dev/null || true)"
+    root_label="$(blkid -p -O $(( ROOT_START_MIB * 1024 * 1024 )) -o value -s LABEL "$IMG" 2>/dev/null || true)"
+    [[ "$boot_label" == "$BOOT_LABEL" ]] || \
+        die "p1 at ${BOOT_START_MIB}MiB has label '$boot_label', expected '$BOOT_LABEL'"
+    [[ "$root_label" == "$ROOT_LABEL" ]] || \
+        die "p2 at ${ROOT_START_MIB}MiB has label '$root_label', expected '$ROOT_LABEL'"
+    log "image labels verified: p1=$boot_label p2=$root_label"
+else
+    warn "blkid not available; skipping the label read-back"
+fi
+
+# The boot partition must contain exactly what boot.scr asks for.
+if command -v mdir >/dev/null 2>&1; then
+    for want in Image dtb.img dtb-regular.img boot.scr; do
+        MTOOLS_SKIP_CHECK=1 mdir -b -i "$IMG@@$(( BOOT_START_MIB * 1024 * 1024 ))" "::/$want" >/dev/null 2>&1 || \
+            die "p1 is missing $want, which boot.scr loads"
+    done
+    log "boot partition contents verified (Image, dtb.img, dtb-regular.img, boot.scr)"
 fi
 
 log "creating bmap"
